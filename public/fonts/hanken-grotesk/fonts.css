@@ -1,0 +1,146 @@
+/* Fonts stylesheet for Hanken Grotesk */
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-100-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 100;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-100-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-200-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 200;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-200-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-300-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-300-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-400-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-500-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-600-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-600-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-700-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-700-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-800-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-800-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-900-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/fonts/hanken-grotesk/hanken-grotesk-900-italic.woff2') format('woff2');
+}
+

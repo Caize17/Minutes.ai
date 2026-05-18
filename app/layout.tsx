@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -10,6 +11,50 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const plusJakartaSans = localFont({
+  src: [
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-200-normal.woff2", weight: "200", style: "normal" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-200-italic.woff2", weight: "200", style: "italic" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-300-italic.woff2", weight: "300", style: "italic" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-400-italic.woff2", weight: "400", style: "italic" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-500-italic.woff2", weight: "500", style: "italic" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-600-italic.woff2", weight: "600", style: "italic" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-700-italic.woff2", weight: "700", style: "italic" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-800-normal.woff2", weight: "800", style: "normal" },
+    { path: "../public/fonts/plus-jakarta-sans/plus-jakarta-sans-800-italic.woff2", weight: "800", style: "italic" },
+  ],
+  variable: "--font-plus-jakarta-sans",
+});
+
+const hankenGrotesk = localFont({
+  src: [
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-100-normal.woff2", weight: "100", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-100-italic.woff2", weight: "100", style: "italic" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-200-normal.woff2", weight: "200", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-200-italic.woff2", weight: "200", style: "italic" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-300-italic.woff2", weight: "300", style: "italic" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-400-italic.woff2", weight: "400", style: "italic" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-500-italic.woff2", weight: "500", style: "italic" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-600-italic.woff2", weight: "600", style: "italic" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-700-italic.woff2", weight: "700", style: "italic" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-800-normal.woff2", weight: "800", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-800-italic.woff2", weight: "800", style: "italic" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-900-normal.woff2", weight: "900", style: "normal" },
+    { path: "../public/fonts/hanken-grotesk/hanken-grotesk-900-italic.woff2", weight: "900", style: "italic" },
+  ],
+  variable: "--font-hanken-grotesk",
 });
 
 export const metadata: Metadata = {
@@ -24,10 +69,11 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+      lang="en">
+      <body className={`${plusJakartaSans.variable} ${hankenGrotesk.variable} bg-[--background]`}>
+        {children}
+      </body>
     </html>
   );
 }
+
