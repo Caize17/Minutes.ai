@@ -1,29 +1,34 @@
 # ==============================================================================
-# Minutes.ai - Google Automation Course Final Project
-# Python Backend & Script Dependencies
+# Minutes.ai - Google Automation & Python Backend Integration
+# Dependencies list for local teammate execution
 # ==============================================================================
 
-# NOTE: The primary Minutes.ai user interface is built as a Next.js (React) 
-# web application and runs on Node.js.
+# Note: The main Minutes.ai user interface is a Next.js (React) application.
+# To run the web interface locally, your teammate only needs to run:
+#   1. npm install
+#   2. npm run dev
 #
-# To run the web interface locally on a laptop:
-#   1. Ensure Node.js (v18+) is installed
-#   2. Run: npm install
-#   3. Run: npm run dev
-#   4. Open: http://localhost:3000
+# To run the Python Supabase backend:
+#   1. pip install -r requirements.txt
+#   2. python backend/main.py
 
 # ------------------------------------------------------------------------------
-# Python Dependencies (For automated distribution scripts, email dispatchers,
-# and background generation helpers)
+# Core Python Web Server & Routing
 # ------------------------------------------------------------------------------
+fastapi>=0.110.0
+uvicorn>=0.28.0
 
-# HTTP client for interacting with webhooks and API endpoints
+# ------------------------------------------------------------------------------
+# Database & Supabase Integrations
+# ------------------------------------------------------------------------------
+supabase>=2.3.0
+postgrest>=0.10.0
+
+# ------------------------------------------------------------------------------
+# Google Automation API & Helpers
+# ------------------------------------------------------------------------------
 requests>=2.31.0
-
-# Official Google API clients (for Gmail distribution & Workspace integration)
 google-api-python-client>=2.116.0
 google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
-
-# Environment variables management for API keys and secure secrets
 python-dotenv>=1.0.1

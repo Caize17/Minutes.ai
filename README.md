@@ -27,15 +27,26 @@ The interactive user interface is built on **Next.js 16** and **React 19**.
 
 ---
 
-### 🐍 Python Automation Setup (Optional)
+### 🐍 Python Supabase Backend Setup
 
-For the Google Automation script integrations (distribution, background synthesizers, or folder sync modules):
+Our Python backend integrates **FastAPI** to serve secure API endpoints and the **Supabase Client** to store meeting minutes and transcripts.
 
 1. **Install Python**: Ensure [Python (v3.9 or higher)](https://www.python.org/) is installed.
-2. **Install Dependencies**: Run the following command in your terminal to fetch the required libraries from `requirements.txt`:
+2. **Install Dependencies**: Run in your terminal:
    ```bash
    pip install -r requirements.txt
    ```
+3. **Configure Environment Variables**:
+   * Copy the template config file:
+     ```bash
+     cp .env.example .env
+     ```
+   * Open `.env` and paste your project's `SUPABASE_URL` and `SUPABASE_KEY` tokens.
+4. **Launch Python Backend Server**:
+   ```bash
+   python backend/main.py
+   ```
+   * The Python API will be live at: **[http://localhost:8000](http://localhost:8000)** (endpoints are fully structured for CORS requests).
 
 ---
 
