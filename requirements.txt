@@ -1,0 +1,29 @@
+# ==============================================================================
+# Minutes.ai - Google Automation Course Final Project
+# Python Backend & Script Dependencies
+# ==============================================================================
+
+# NOTE: The primary Minutes.ai user interface is built as a Next.js (React) 
+# web application and runs on Node.js.
+#
+# To run the web interface locally on a laptop:
+#   1. Ensure Node.js (v18+) is installed
+#   2. Run: npm install
+#   3. Run: npm run dev
+#   4. Open: http://localhost:3000
+
+# ------------------------------------------------------------------------------
+# Python Dependencies (For automated distribution scripts, email dispatchers,
+# and background generation helpers)
+# ------------------------------------------------------------------------------
+
+# HTTP client for interacting with webhooks and API endpoints
+requests>=2.31.0
+
+# Official Google API clients (for Gmail distribution & Workspace integration)
+google-api-python-client>=2.116.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+
+# Environment variables management for API keys and secure secrets
+python-dotenv>=1.0.1
