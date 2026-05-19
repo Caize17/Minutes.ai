@@ -67,6 +67,13 @@ def get_auth_client(token: HTTPAuthorizationCredentials = Depends(security)):
         return {"client": request_client, "user": user_response.user}
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
+@app.get("/")
+def health_check():
+    return {
+        "status": "healthy",
+        "service": "Minutes.ai Python Backend Automation API",
+        "version": "1.1.0"
+    }
 
 
 class UserCredentials(BaseModel):
