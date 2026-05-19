@@ -818,11 +818,24 @@ export default function Dashboard({
                 />
               </div>
 
-              <div className="bg-[#502D55]/3 rounded-2xl p-4 border border-[#502D55]/5 flex items-start gap-2.5">
-                <span className="text-[#935073] font-bold text-xs mt-0.5">ℹ</span>
-                <p className="font-hanken text-[11px] leading-relaxed text-[#502D55]/85">
-                  <strong>Security Note:</strong> Your email credentials are saved securely in your private, encrypted Supabase authentication metadata. They are never shared publicly or stored in plain-text databases.
-                </p>
+              <div className="bg-[#502D55]/3 rounded-2xl p-5 border border-[#502D55]/5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#935073] text-sm">🔑</span>
+                  <strong className="font-plus-jakarta text-xs text-[#502D55] font-extrabold uppercase tracking-wider">How to get a Gmail App Password:</strong>
+                </div>
+                <ol className="font-hanken text-[11px] leading-relaxed text-[#502D55]/85 list-decimal pl-4 space-y-1">
+                  <li>
+                    Go to your <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-[#935073] hover:text-[#502D55] font-extrabold underline cursor-pointer">Google App Passwords settings</a>.
+                  </li>
+                  <li>Ensure <strong>2-Step Verification</strong> is enabled on your Google account.</li>
+                  <li>Select/create an app name (e.g. <code>Minutes.ai</code>) and click <strong>Create</strong>.</li>
+                  <li>Copy the <strong>16-character code</strong> and paste it into the field above!</li>
+                </ol>
+                <div className="border-t border-[#502D55]/5 pt-2.5">
+                  <p className="font-hanken text-[10px] leading-relaxed text-[#502D55]/60 italic">
+                    Note: Your credentials are saved securely in your private, encrypted Supabase metadata and are never shared publicly.
+                  </p>
+                </div>
               </div>
 
               {/* Action Buttons */}
