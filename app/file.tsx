@@ -235,7 +235,8 @@ export default function File({
       });
 
       if (!response.ok) {
-        throw new Error("AI Automation failed on the server.");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || "AI Automation failed on the server.");
       }
 
       const data = await response.json();
