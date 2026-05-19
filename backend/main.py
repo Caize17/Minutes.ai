@@ -29,16 +29,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-URL: str = os.environ.get("SUPABASE_URL")
-KEY: str = os.environ.get("SUPABASE_ANON_KEY")
+URL: str = os.environ.get("SUPABASE_URL", "")
+KEY: str = os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY", "")
 
 # 1. We keep a global client for unauthenticated routes (like signup)
-global_supabase: Client = create_client(URL, KEY)
+global_supabase = None
+if URL and KEY:
+    try:
+        global_supabase = create_client(URL, KEY)
+    except Exception as e:
+        print(f"⚠️ Failed to create global Supabase client: {e}")
 
 security = HTTPBearer()
 
 # 2. Refactored Dependency: Creates a fresh, authenticated client per request
 def get_auth_client(token: HTTPAuthorizationCredentials = Depends(security)):
+    if not URL or not KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Backend Server Misconfigured: SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables on hosting."
+        )
     try:
         # Create a fresh client specifically for this request and inject the user's JWT into the headers
         # This guarantees RLS policies work without mutating global state!
@@ -70,6 +80,11 @@ class LoginCredentials(BaseModel):
 
 @app.post("/signup")
 async def signup(credentials: UserCredentials):
+    if not URL or not KEY or not global_supabase:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase environment credentials (SUPABASE_URL / SUPABASE_ANON_KEY) are missing on backend hosting."
+        )
     try:
         # We can safely use the global client here because we aren't setting a session
         response = global_supabase.auth.sign_up({
@@ -101,6 +116,11 @@ async def get_profile(auth_data: dict = Depends(get_auth_client)):
 
 @app.post("/login")
 async def login(credentials: LoginCredentials):
+    if not URL or not KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase environment credentials (SUPABASE_URL / SUPABASE_ANON_KEY) are missing on backend hosting."
+        )
     try:
         # 1. Create a fresh, temporary client just for this login request
         # This prevents the logged-in session from polluting the global client state!
