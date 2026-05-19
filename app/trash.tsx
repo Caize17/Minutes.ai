@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "../backend/supabase/client";
 
 // Icons
 const GridIcon = () => (
@@ -52,19 +53,58 @@ interface TrashItem {
 
 interface TrashProps {
   onViewChange: (view: 'home' | 'login' | 'signup' | 'dashboard' | 'team' | 'file' | 'about' | 'creators' | 'trash') => void;
+  documents?: any[];
+  onUpdateDocuments?: (newDocs: any[]) => void;
+  teams?: any[];
+  onUpdateTeams?: (newTeams: any[]) => void;
 }
 
-export default function Trash({ onViewChange }: TrashProps) {
-  const [deletedItems, setDeletedItems] = useState<TrashItem[]>([
-    { id: "1", title: "GDGoC's Meeting", type: "Workspace", deletedAt: "May 15, 2026", originalPath: "Dashboard / Workspaces" },
-    { id: "2", title: "Marketing Strategy", type: "Document", deletedAt: "May 16, 2026", originalPath: "Marketing Team / Documents" },
-    { id: "3", title: "Budget Planning Review", type: "Document", deletedAt: "May 17, 2026", originalPath: "Finance Workspace / Documents" }
-  ]);
-
+export default function Trash({ 
+  onViewChange, 
+  documents = [], 
+  onUpdateDocuments, 
+  teams = [], 
+  onUpdateTeams 
+}: TrashProps) {
+  const supabase = createClient();
+  
   const [notification, setNotification] = useState<string | null>(null);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [modalAction, setModalAction] = useState<'delete-item' | 'empty-trash'>('delete-item');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserEmail(user.email || "Active User");
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Compute dynamic deleted items
+  const deletedDocs: TrashItem[] = documents.filter(d => d.deleted).map(d => ({
+    id: d.id,
+    title: d.title,
+    type: 'Document',
+    deletedAt: d.deletedAt ? new Date(d.deletedAt).toLocaleDateString() : "Recently",
+    originalPath: `Workspace / Documents`
+  }));
+
+  const deletedWorkspaces: TrashItem[] = teams.filter(t => t.deleted).map(t => ({
+    id: t.id,
+    title: t.name || "Your Team",
+    type: 'Workspace',
+    deletedAt: t.deletedAt ? new Date(t.deletedAt).toLocaleDateString() : "Recently",
+    originalPath: `Dashboard / Workspaces`
+  }));
+
+  const deletedItems = [...deletedWorkspaces, ...deletedDocs];
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    onViewChange('home');
+  };
 
   const triggerNotification = (message: string) => {
     setNotification(message);
@@ -73,9 +113,32 @@ export default function Trash({ onViewChange }: TrashProps) {
     }, 3500);
   };
 
-  const handleRestore = (id: string, title: string) => {
-    setDeletedItems(deletedItems.filter(item => item.id !== id));
-    triggerNotification(`"${title}" successfully restored to its original workspace!`);
+  const handleRestore = (id: string, title: string, type: 'Document' | 'Workspace') => {
+    if (type === 'Document') {
+      if (onUpdateDocuments) {
+        const docToRestore = documents.find(d => d.id === id);
+        const docTeamId = docToRestore?.team_id;
+        if (docTeamId) {
+          const teamOfDoc = teams.find(t => t.id === docTeamId);
+          if (teamOfDoc?.deleted && onUpdateTeams) {
+            const updatedTeams = teams.map(t => t.id === docTeamId ? { ...t, deleted: false } : t);
+            onUpdateTeams(updatedTeams);
+          }
+        }
+        const updatedDocs = documents.map(d => d.id === id ? { ...d, deleted: false } : d);
+        onUpdateDocuments(updatedDocs);
+      }
+    } else if (type === 'Workspace') {
+      if (onUpdateTeams) {
+        const updatedTeams = teams.map(t => t.id === id ? { ...t, deleted: false } : t);
+        onUpdateTeams(updatedTeams);
+      }
+      if (onUpdateDocuments) {
+        const updatedDocs = documents.map(d => d.team_id === id ? { ...d, deleted: false } : d);
+        onUpdateDocuments(updatedDocs);
+      }
+    }
+    triggerNotification(`"${title}" successfully restored to active workspaces!`);
   };
 
   const openDeleteModal = (id: string) => {
@@ -95,18 +158,34 @@ export default function Trash({ onViewChange }: TrashProps) {
     if (modalAction === 'delete-item' && selectedItemId) {
       const targetItem = deletedItems.find(item => item.id === selectedItemId);
       if (targetItem) {
-        setDeletedItems(deletedItems.filter(item => item.id !== selectedItemId));
+        if (targetItem.type === 'Document') {
+          if (onUpdateDocuments) {
+            onUpdateDocuments(documents.filter(d => d.id !== selectedItemId));
+          }
+        } else if (targetItem.type === 'Workspace') {
+          if (onUpdateTeams) {
+            onUpdateTeams(teams.filter(t => t.id !== selectedItemId));
+          }
+          if (onUpdateDocuments) {
+            onUpdateDocuments(documents.filter(d => d.team_id !== selectedItemId));
+          }
+        }
         triggerNotification(`"${targetItem.title}" has been permanently deleted.`);
       }
       setSelectedItemId(null);
     } else if (modalAction === 'empty-trash') {
-      setDeletedItems([]);
+      if (onUpdateDocuments) {
+        onUpdateDocuments(documents.filter(d => !d.deleted));
+      }
+      if (onUpdateTeams) {
+        onUpdateTeams(teams.filter(t => !t.deleted));
+      }
       triggerNotification("Trash bin successfully purged and emptied permanently.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#FFEEDF] flex selection:bg-[#935073]/20 relative overflow-hidden">
+    <div className="h-screen bg-[#FFEEDF] flex selection:bg-[#935073]/20 relative overflow-hidden">
 
       {/* Toast Notification Banner */}
       {notification && (
@@ -167,45 +246,75 @@ export default function Trash({ onViewChange }: TrashProps) {
       )}
 
       {/* Dashboard Left Sidebar (Fixed) */}
-      <aside className="w-80 bg-[var(--tertiarycolor)] flex flex-col justify-between border-r border-[#502D55]/5 h-screen overflow-y-auto flex-shrink-0">
+      <aside className="w-20 hover:w-64 md:hover:w-72 group/sidebar transition-all duration-300 ease-in-out bg-[var(--tertiarycolor)] flex flex-col justify-between border-r border-[#502D55]/5 h-screen flex-shrink-0 overflow-hidden">
 
-        <div>
+        <div className="flex flex-col w-full">
           {/* Logo block */}
           <button
             onClick={() => onViewChange('home')}
-            className="font-plus-jakarta text-2xl md:text-3xl font-extrabold text-[#502D55] px-8 pt-8 pb-12 text-left self-start hover:opacity-85 transition-opacity"
+            className="font-plus-jakarta text-2xl md:text-3xl font-extrabold text-[#502D55] px-6 pt-8 pb-12 text-left self-start hover:opacity-85 transition-all duration-300 cursor-pointer flex items-center overflow-hidden whitespace-nowrap"
           >
-            Minutes.ai
+            <span className="text-3xl font-extrabold min-w-[32px] text-center">M</span>
+            <span className="opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-300 ease-in-out overflow-hidden">inutes.ai</span>
           </button>
 
           {/* Menu Items */}
-          <nav className="px-4 flex flex-col gap-1.5">
+          <nav className="px-3.5 flex flex-col gap-1.5 w-full">
             <button
               onClick={() => onViewChange('dashboard')}
-              className="flex items-center gap-4 w-full px-5 py-4 rounded-2xl font-plus-jakarta font-bold text-[#502D55]/65 hover:text-[#502D55] hover:bg-[#502D55]/4 text-left transition-colors cursor-pointer relative overflow-hidden"
+              className="flex items-center w-full px-4.5 py-4 rounded-2xl font-plus-jakarta font-bold text-[#502D55]/65 hover:text-[#502D55] hover:bg-[#502D55]/4 text-left transition-colors cursor-pointer relative overflow-hidden whitespace-nowrap"
             >
-              <GridIcon />
-              <span>Dashboard</span>
+              <div className="flex-shrink-0 min-w-[20px] flex justify-center">
+                <GridIcon />
+              </div>
+              <span className="opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-300 ease-in-out overflow-hidden ml-0 group-hover/sidebar:ml-4">
+                Dashboard
+              </span>
             </button>
 
             <button
-              className="flex items-center gap-4 w-full px-5 py-4 rounded-2xl font-plus-jakarta font-bold text-[#502D55] bg-[#502D55]/8 text-left transition-colors relative overflow-hidden"
+              className="flex items-center w-full px-4.5 py-4 rounded-2xl font-plus-jakarta font-bold text-[#502D55] bg-[#502D55]/8 text-left transition-colors relative overflow-hidden whitespace-nowrap"
             >
               <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#502D55] rounded-r-md" />
-              <TrashIcon />
-              <span>Trash</span>
+              <div className="flex-shrink-0 min-w-[20px] flex justify-center">
+                <TrashIcon />
+              </div>
+              <span className="opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-300 ease-in-out overflow-hidden ml-0 group-hover/sidebar:ml-4">
+                Trash
+              </span>
             </button>
           </nav>
         </div>
 
-        {/* Sign Out Button */}
-        <div className="p-4 mb-4">
+        {/* Profile and Sign Out Container */}
+        <div className="p-3.5 mb-4 w-full flex flex-col gap-2 border-t border-[#502D55]/5 pt-4">
+          
+          {/* User Profile Info Card */}
+          {userEmail && (
+            <div className="flex items-center w-full px-1.5 py-3 group-hover/sidebar:px-4 group-hover/sidebar:bg-[#502D55]/3 group-hover/sidebar:border group-hover/sidebar:border-[#502D55]/5 border border-transparent rounded-2xl whitespace-nowrap overflow-hidden transition-all duration-300">
+              <div className="w-10 h-10 rounded-full bg-[#502D55]/10 text-[#502D55] font-extrabold flex items-center justify-center flex-shrink-0 font-plus-jakarta text-sm border border-[#502D55]/15 shadow-sm">
+                {userEmail.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex flex-col opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-300 ease-in-out overflow-hidden ml-0 group-hover/sidebar:ml-3">
+                <span className="font-plus-jakarta text-[10px] font-extrabold text-[#502D55]/50 uppercase tracking-wider leading-none mb-1">Signed in as</span>
+                <span className="font-hanken text-[12px] font-bold text-[#502D55] truncate max-w-[135px] leading-tight" title={userEmail}>
+                  {userEmail}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Sign Out Button */}
           <button
-            onClick={() => onViewChange('home')}
-            className="flex items-center gap-4 w-full px-5 py-4 rounded-2xl font-plus-jakarta font-bold text-[#502D55]/65 hover:text-[#502D55] hover:bg-[#502D55]/4 text-left transition-colors cursor-pointer"
+            onClick={handleSignOut}
+            className="flex items-center w-full px-4.5 py-4 rounded-2xl font-plus-jakarta font-bold text-[#502D55]/65 hover:text-[#502D55] hover:bg-[#502D55]/4 text-left transition-colors cursor-pointer whitespace-nowrap"
           >
-            <LogoutIcon />
-            <span>Sign out</span>
+            <div className="flex-shrink-0 min-w-[20px] flex justify-center">
+              <LogoutIcon />
+            </div>
+            <span className="opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-300 ease-in-out overflow-hidden ml-0 group-hover/sidebar:ml-4">
+              Sign out
+            </span>
           </button>
         </div>
 
@@ -273,7 +382,7 @@ export default function Trash({ onViewChange }: TrashProps) {
                   {/* Actions buttons */}
                   <div className="flex items-center justify-between mt-6 border-t border-[#502D55]/5 pt-4">
                     <button
-                      onClick={() => handleRestore(item.id, item.title)}
+                      onClick={() => handleRestore(item.id, item.title, item.type)}
                       className="flex items-center gap-1.5 text-xs font-plus-jakarta font-bold text-[#502D55] hover:text-[#502D55]/80 bg-[#FFEEDF] hover:bg-[#FFEEDF]/90 px-3 py-1.5 rounded-lg border border-[#502D55]/10 active:scale-[0.97] transition-all cursor-pointer"
                     >
                       <RestoreIcon />

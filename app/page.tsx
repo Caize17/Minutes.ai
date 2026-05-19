@@ -7,6 +7,7 @@ import Dashboard from "./dashboard";
 import Team from "./team";
 import File from "./file";
 import Trash from "./trash";
+import { createClient } from "../backend/supabase/client";
 
 // 1. Sparkles Icon SVG (Card 1)
 const SparklesIcon = () => (
@@ -36,6 +37,51 @@ const PaperAirplaneIcon = () => (
 
 export default function Home() {
   const [view, setView] = useState<'home' | 'login' | 'signup' | 'dashboard' | 'team' | 'file' | 'about' | 'creators' | 'trash'>('home');
+  const [isVerifiedTab, setIsVerifiedTab] = useState(false);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const supabase = createClient();
+
+  const [teams, setTeams] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Synchronize dynamic user-specific localStorage arrays whenever userId changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const teamsKey = userId ? `minutes_ai_teams_${userId}` : 'minutes_ai_teams_guest';
+      const docsKey = userId ? `minutes_ai_documents_${userId}` : 'minutes_ai_documents_guest';
+
+      const savedTeams = localStorage.getItem(teamsKey);
+      const savedDocs = localStorage.getItem(docsKey);
+
+      if (savedTeams) {
+        setTeams(JSON.parse(savedTeams));
+      } else {
+        setTeams([]);
+        localStorage.setItem(teamsKey, JSON.stringify([]));
+      }
+
+      if (savedDocs) {
+        setDocuments(JSON.parse(savedDocs));
+      } else {
+        setDocuments([]);
+        localStorage.setItem(docsKey, JSON.stringify([]));
+      }
+    }
+  }, [userId]);
+
+  const updateTeams = (newTeams: any[]) => {
+    setTeams(newTeams);
+    const teamsKey = userId ? `minutes_ai_teams_${userId}` : 'minutes_ai_teams_guest';
+    localStorage.setItem(teamsKey, JSON.stringify(newTeams));
+  };
+
+  const updateDocuments = (newDocs: any[]) => {
+    setDocuments(newDocs);
+    const docsKey = userId ? `minutes_ai_documents_${userId}` : 'minutes_ai_documents_guest';
+    localStorage.setItem(docsKey, JSON.stringify(newDocs));
+  };
 
   // Push new state to history for back/forward buttons
   const handleViewChange = (newView: 'home' | 'login' | 'signup' | 'dashboard' | 'team' | 'file' | 'about' | 'creators' | 'trash') => {
@@ -46,8 +92,23 @@ export default function Home() {
 
   // Synchronize on mount and handle popstate browser back/forward buttons
   useEffect(() => {
-    // 1. Initial state sync from query params (supports deep linking)
+    // 1. Exchange 'code' parameter on mount and strip it to prevent double-exchange loops
     const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (!error && data?.session) {
+          setUserId(data.session.user.id);
+          setView('dashboard');
+        }
+      }).catch(() => {});
+
+      const cleanParams = new URLSearchParams(window.location.search);
+      cleanParams.delete('code');
+      const cleanUrl = window.location.pathname + (cleanParams.toString() ? `?${cleanParams.toString()}` : '');
+      window.history.replaceState({}, '', cleanUrl);
+    }
+
     const initialView = params.get('view') as 'login' | 'signup' | 'dashboard' | 'team' | 'file' | 'about' | 'creators' | 'trash' | null;
     const validViews: ('login' | 'signup' | 'dashboard' | 'team' | 'file' | 'about' | 'creators' | 'trash')[] = [
       'login', 'signup', 'dashboard', 'team', 'file', 'about', 'creators', 'trash'
@@ -56,18 +117,127 @@ export default function Home() {
       setView(initialView);
     }
 
-    // 2. popstate event listener for browser navigation back/forward
+    if (params.get('verified') === 'true') {
+      setIsVerifiedTab(true);
+    }
+
+    // 2. Force session recovery on mount (handles URL hash parsing on Tab B)
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error && error.message.includes('Refresh Token')) {
+        // Self-heal: clear stale client credentials
+        supabase.auth.signOut();
+        setUserId(null);
+      } else if (session) {
+        setUserId(session.user.id);
+        const p = new URLSearchParams(window.location.search);
+        if (p.get('verified') !== 'true') {
+          setView((prev) => {
+            if (prev === 'home' || prev === 'login' || prev === 'signup') {
+              return 'dashboard';
+            }
+            return prev;
+          });
+        }
+      }
+    }).catch(() => { });
+
+    // 3. popstate event listener for browser navigation back/forward
     const handlePopState = () => {
       const p = new URLSearchParams(window.location.search);
       const currentView = p.get('view') as 'login' | 'signup' | 'dashboard' | 'team' | 'file' | 'about' | 'creators' | 'trash' | null;
       setView(currentView || 'home');
     };
-
     window.addEventListener('popstate', handlePopState);
+
+    // 4. Bulletproof cross-tab localStorage event listener
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('sb-') && e.key.endsWith('-auth-token')) {
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+          if (error && error.message.includes('Refresh Token')) {
+            supabase.auth.signOut();
+            setUserId(null);
+          } else if (session) {
+            setUserId(session.user.id);
+            const p = new URLSearchParams(window.location.search);
+            if (p.get('verified') !== 'true') {
+              setView((prev) => {
+                if (prev === 'home' || prev === 'login' || prev === 'signup') {
+                  return 'dashboard';
+                }
+                return prev;
+              });
+            }
+          }
+        }).catch(() => { });
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // 5. Listen for auth state changes inside the active tab
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        setUserId(session.user.id);
+      } else {
+        setUserId(null);
+      }
+      if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        const p = new URLSearchParams(window.location.search);
+        if (p.get('verified') !== 'true') {
+          setView((prev) => {
+            if (prev === 'home' || prev === 'login' || prev === 'signup') {
+              return 'dashboard';
+            }
+            return prev;
+          });
+        }
+      }
+    });
+
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('storage', handleStorageChange);
+      subscription.unsubscribe();
     };
   }, []);
+
+  if (isVerifiedTab) {
+    return (
+      <div className="min-h-screen bg-[#FFEEDF] flex items-center justify-center p-4 selection:bg-[#935073]/20 relative overflow-hidden">
+        {/* Modern Aesthetic Backdrop Gradient Orbs */}
+        <div className="absolute top-[-10%] left-[-15%] w-[600px] h-[600px] rounded-full bg-[#935073]/5 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-15%] w-[600px] h-[600px] rounded-full bg-[#502D55]/5 blur-[120px] pointer-events-none" />
+
+        <div className="w-full max-w-md bg-[#FAF6F2] rounded-[32px] p-8 md:p-12 text-center shadow-2xl shadow-[#502D55]/10 border border-[#502D55]/5 relative z-10 animate-fade-in flex flex-col items-center">
+          {/* Animated checkmark icon */}
+          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 animate-bounce">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-8 h-8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </div>
+
+          <h1 className="font-plus-jakarta font-extrabold text-3xl text-[#502D55] tracking-tight mb-3">
+            Email Confirmed!
+          </h1>
+
+          <p className="font-hanken text-sm text-[#502D55]/70 leading-relaxed mb-8 font-semibold">
+            Your account has been successfully activated. You can now close this tab and return to your original screen where your workspace is already open!
+          </p>
+
+          <div className="w-full flex flex-col gap-3">
+            <button
+              onClick={() => {
+                const url = window.location.origin + '/?view=dashboard';
+                window.location.href = url;
+              }}
+              className="w-full bg-[#502D55] hover:bg-[#502D55]/95 text-white font-plus-jakarta font-bold text-sm py-4 rounded-xl transition-all duration-200 shadow-lg shadow-[#502D55]/10 active:scale-[0.99] cursor-pointer"
+            >
+              Go to Workspace (This Tab)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Dynamically render page views from the same app directory
   if (view === 'login') {
@@ -79,19 +249,57 @@ export default function Home() {
   }
 
   if (view === 'dashboard') {
-    return <Dashboard onViewChange={handleViewChange} />;
+    return (
+      <Dashboard
+        onViewChange={handleViewChange}
+        onSelectTeam={(id) => setSelectedTeamId(id)}
+        onSelectFile={(id) => setSelectedFileId(id)}
+        teams={teams}
+        documents={documents}
+        onUpdateTeams={updateTeams}
+        onUpdateDocuments={updateDocuments}
+      />
+    );
   }
 
   if (view === 'team') {
-    return <Team onViewChange={handleViewChange} />;
+    return (
+      <Team
+        onViewChange={handleViewChange}
+        teamId={selectedTeamId}
+        onSelectFile={(id) => setSelectedFileId(id)}
+        teams={teams}
+        documents={documents}
+        onUpdateTeams={updateTeams}
+        onUpdateDocuments={updateDocuments}
+      />
+    );
   }
 
   if (view === 'file') {
-    return <File onViewChange={handleViewChange} />;
+    return (
+      <File
+        onViewChange={handleViewChange}
+        fileId={selectedFileId}
+        onSelectTeam={(id) => setSelectedTeamId(id)}
+        teams={teams}
+        documents={documents}
+        onUpdateTeams={updateTeams}
+        onUpdateDocuments={updateDocuments}
+      />
+    );
   }
 
   if (view === 'trash') {
-    return <Trash onViewChange={handleViewChange} />;
+    return (
+      <Trash 
+        onViewChange={handleViewChange} 
+        documents={documents}
+        onUpdateDocuments={updateDocuments}
+        teams={teams}
+        onUpdateTeams={updateTeams}
+      />
+    );
   }
 
   // ----------------------------------------------------
@@ -393,7 +601,7 @@ export default function Home() {
             Start writing
           </button>
           <button
-            onClick={() => handleViewChange('signup')}
+            onClick={() => handleViewChange('login')}
             className="font-plus-jakarta font-bold text-base text-[#502D55] border-2 border-[#502D55] hover:bg-[#502D55]/5 px-8 py-3.5 rounded-2xl transition-all duration-200 cursor-pointer"
           >
             View Recent Work

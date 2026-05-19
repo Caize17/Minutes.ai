@@ -1,4 +1,6 @@
 "use client";
+import { useState } from 'react';
+import { createClient } from '../backend/supabase/client';
 
 // Colorful Google Logo SVG
 const GoogleIcon = () => (
@@ -15,9 +17,47 @@ interface LoginProps {
 }
 
 export default function Login({ onViewChange }: LoginProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const supabase = createClient();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    } else {
+      setLoading(false);
+      onViewChange('dashboard');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000/auth/callback',
+      },
+    });
+
+    if (error) {
+      setError(error.message);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#FFEEDF] flex items-center justify-center p-4 md:p-8 selection:bg-[#935073]/20 w-full relative overflow-hidden">
-      
+
       {/* Modern Aesthetic Backdrop Gradient Orbs */}
       <div className="absolute top-[-10%] left-[-15%] w-[600px] h-[600px] rounded-full bg-[#935073]/5 blur-[120px] pointer-events-none animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-15%] w-[600px] h-[600px] rounded-full bg-[#502D55]/5 blur-[120px] pointer-events-none animate-pulse" />
@@ -66,12 +106,12 @@ export default function Login({ onViewChange }: LoginProps) {
             onClick={() => onViewChange('home')}
             className="flex items-center gap-2 text-xs font-bold font-plus-jakarta text-[#502D55]/60 hover:text-[#502D55] transition-colors mb-6 self-start group cursor-pointer"
           >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              strokeWidth="2.5" 
-              stroke="currentColor" 
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="2.5"
+              stroke="currentColor"
               className="w-4 h-4 transform group-hover:-translate-x-0.5 transition-transform"
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
@@ -90,7 +130,13 @@ export default function Login({ onViewChange }: LoginProps) {
           </div>
 
           {/* Form */}
-          <form onSubmit={(e) => { e.preventDefault(); onViewChange('dashboard'); }} className="flex flex-col gap-5">
+          <form onSubmit={handleLogin} className="flex flex-col gap-5">
+
+            {error && (
+              <div className="bg-red-50 text-red-500 text-sm p-3 rounded-xl font-hanken font-semibold border border-red-100">
+                {error}
+              </div>
+            )}
 
             {/* Email Field */}
             <div className="flex flex-col gap-1.5">
@@ -101,6 +147,8 @@ export default function Login({ onViewChange }: LoginProps) {
                 type="email"
                 id="email"
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="juan.delacruz@mail.com"
                 className="w-full bg-[#FAF5F0] border border-[#502D55]/20 rounded-xl px-4 py-3.5 text-sm text-[#502D55] placeholder-[#B6B6B6] font-hanken focus:outline-none focus:border-[#502D55] focus:ring-4 focus:ring-[#935073]/8 transition-all duration-200"
               />
@@ -123,6 +171,8 @@ export default function Login({ onViewChange }: LoginProps) {
                 type="password"
                 id="password"
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="*************"
                 className="w-full bg-[#FAF5F0] border border-[#502D55]/20 rounded-xl px-4 py-3.5 text-sm text-[#502D55] placeholder-[#B6B6B6] font-hanken focus:outline-none focus:border-[#502D55] focus:ring-4 focus:ring-[#935073]/8 transition-all duration-200"
               />
@@ -131,9 +181,10 @@ export default function Login({ onViewChange }: LoginProps) {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full bg-[#502D55] hover:bg-[#502D55]/95 text-white font-plus-jakarta font-bold text-sm py-4 rounded-xl transition-all duration-200 mt-4 shadow-lg shadow-[#502D55]/10 active:scale-[0.99] cursor-pointer"
+              disabled={loading}
+              className="w-full bg-[#502D55] hover:bg-[#502D55]/95 text-white font-plus-jakarta font-bold text-sm py-4 rounded-xl transition-all duration-200 mt-4 shadow-lg shadow-[#502D55]/10 active:scale-[0.99] cursor-pointer disabled:opacity-70"
             >
-              Log In
+              {loading ? 'Logging In...' : 'Log In'}
             </button>
 
           </form>
@@ -150,11 +201,11 @@ export default function Login({ onViewChange }: LoginProps) {
           {/* Google Button */}
           <button
             type="button"
-            onClick={() => onViewChange('dashboard')}
+            onClick={handleGoogleLogin}
             className="w-full bg-transparent hover:bg-[#502D55]/5 border border-[#502D55]/30 hover:border-[#502D55] rounded-xl py-3.5 flex items-center justify-center gap-3 transition-all duration-200 font-plus-jakarta font-bold text-sm text-[#502D55] active:scale-[0.99] cursor-pointer"
           >
             <GoogleIcon />
-            Sign up with Google
+            Log in with Google
           </button>
 
           {/* Footer prompt */}

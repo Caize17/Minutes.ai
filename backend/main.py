@@ -1,171 +1,362 @@
 import os
-from fastapi import FastAPI, HTTPException, status
+import smtplib
+from email.message import EmailMessage
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from supabase import create_client, Client, ClientOptions
+from pydantic import BaseModel
+from typing import Optional
 from dotenv import load_dotenv
-from supabase import create_client, Client
+import google.generativeai as genai
+from fpdf import FPDF
+import json
 
-# Load environment variables from a local .env file
+# Import local config
+import config
+
+# Load environment variables
 load_dotenv()
 
-# Initialize FastAPI App
-app = FastAPI(
-    title="Minutes.ai Automation Backend",
-    description="Python API backend integrating Supabase and Google Automation APIs",
-    version="1.0.0"
-)
+app = FastAPI()
 
-# Setup CORS middleware to allow your Next.js app to make API requests securely
+# Enable CORS for Next.js web application communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Local Next.js frontend origin
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ------------------------------------------------------------------------------
-# Supabase Configuration & Client Initialization
-# ------------------------------------------------------------------------------
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://your-project-ref.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "your-anon-or-service-role-key-here")
+URL: str = os.environ.get("SUPABASE_URL")
+KEY: str = os.environ.get("SUPABASE_ANON_KEY")
 
-# Initialize the Supabase Python Client
-# (Gracefully logs warning if variables are placeholder so the server still runs!)
-try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-except Exception as e:
-    print(f"⚠️ Warning: Failed to connect to Supabase. Check your .env credentials. Details: {e}")
-    supabase = None
+# 1. We keep a global client for unauthenticated routes (like signup)
+global_supabase: Client = create_client(URL, KEY)
 
-# ------------------------------------------------------------------------------
-# Data Schemas (Pydantic Models)
-# ------------------------------------------------------------------------------
-class MOMStructureConfig(BaseModel):
-    bulletingStyle: str = "concise"  # e.g., 'concise', 'detailed', 'narrative'
-    tone: str = "professional"       # e.g., 'professional', 'casual', 'technical'
-    includeActionItems: bool = True
+security = HTTPBearer()
 
-class MOMCreateRequest(BaseModel):
-    title: str
-    rawTranscript: str
-    structure: MOMStructureConfig
-    distributionEmails: List[EmailStr]
-
-class MOMResponse(BaseModel):
-    id: str
-    title: str
-    synthesizedContent: str
-    distributionEmails: List[str]
-    status: str
-
-# ------------------------------------------------------------------------------
-# API Endpoints
-# ------------------------------------------------------------------------------
-
-@app.get("/")
-def health_check():
-    """Verify backend and database connection status."""
-    supabase_status = "Connected" if supabase is not None else "Not Configured"
-    return {
-        "status": "online",
-        "app": "Minutes.ai Python API",
-        "database": f"Supabase ({supabase_status})",
-        "instructions": "Talks to Supabase to handle file storage and automated distributions"
-    }
-
-@app.post("/api/mom", response_model=MOMResponse, status_code=status.HTTP_201_CREATED)
-def create_meeting_minutes(payload: MOMCreateRequest):
-    """
-    1. Parse raw transcript text.
-    2. Synthesize structured MOM (Google Automation workflow template).
-    3. Save the entry directly in Supabase.
-    4. Automatically trigger email distributions.
-    """
-    if not supabase:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase credentials are not configured in the .env file."
-        )
-
-    # Simplified mock AI synthesis guidelines matching user customization options
-    bullet_marker = "•" if payload.structure.bulletingStyle == "concise" else "✦"
-    synthesized_text = (
-        f"# {payload.title}\n\n"
-        f"**Tone:** {payload.structure.tone.capitalize()}\n\n"
-        f"## 1. Executive Summary\n"
-        f"{bullet_marker} Meeting transcript successfully parsed. Automated script synthesized notes.\n\n"
-    )
-
-    if payload.structure.includeActionItems:
-        synthesized_text += "## 2. Action Items\n"
-        for email in payload.distributionEmails:
-            synthesized_text += f"{bullet_marker} Review guidelines and collaborate with: {email}\n"
-
+# 2. Refactored Dependency: Creates a fresh, authenticated client per request
+def get_auth_client(token: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        # Save into Supabase table named 'meeting_minutes'
-        db_payload = {
-            "title": payload.title,
-            "transcript": payload.rawTranscript,
-            "content": synthesized_text,
-            "recipients": payload.distributionEmails,
-            "status": "Completed"
-        }
-        
-        response = supabase.table("meeting_minutes").insert(db_payload).execute()
-        
-        # Verify if database saved correctly
-        if len(response.data) == 0:
-            raise HTTPException(status_code=500, detail="Database write operation failed.")
-
-        saved_item = response.data[0]
-        
-        return MOMResponse(
-            id=str(saved_item.get("id")),
-            title=saved_item.get("title"),
-            synthesizedContent=saved_item.get("content"),
-            distributionEmails=saved_item.get("recipients"),
-            status=saved_item.get("status")
+        # Create a fresh client specifically for this request and inject the user's JWT into the headers
+        # This guarantees RLS policies work without mutating global state!
+        request_client = create_client(
+            URL, 
+            KEY, 
+            options=ClientOptions(headers={"Authorization": f"Bearer {token.credentials}"})
         )
-
-    except Exception as e:
-        # Fallback simulated response so teammate can test locally without database setup
-        print(f"Database write bypass (local simulation): {e}")
-        return MOMResponse(
-            id="simulated-id-1234",
-            title=payload.title,
-            synthesizedContent=synthesized_text,
-            distributionEmails=payload.distributionEmails,
-            status="Simulated Local Success"
-        )
-
-@app.get("/api/mom/{mom_id}", response_model=MOMResponse)
-def get_meeting_minutes(mom_id: str):
-    """Retrieve individual MOM documentation from Supabase."""
-    if not supabase:
-        raise HTTPException(status_code=503, detail="Supabase not configured.")
         
-    try:
-        response = supabase.table("meeting_minutes").select("*").eq("id", mom_id).execute()
-        if len(response.data) == 0:
-            raise HTTPException(status_code=404, detail="MOM record not found in Supabase.")
+        # Verify the token is valid and fetch the user
+        user_response = request_client.auth.get_user(token.credentials)
+        if user_response is None or user_response.user is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
             
-        record = response.data[0]
-        return MOMResponse(
-            id=str(record.get("id")),
-            title=record.get("title"),
-            synthesizedContent=record.get("content"),
-            distributionEmails=record.get("recipients"),
-            status=record.get("status")
-        )
+        # Return a dictionary containing both the configured client and the user
+        return {"client": request_client, "user": user_response.user}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e))
 
-# ------------------------------------------------------------------------------
-# Dev Run Entrypoint
-# ------------------------------------------------------------------------------
-if __name__ == "__main__":
-    import uvicorn
-    # Automatically reload server on code changes (great for local teammate sandbox!)
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+
+class UserCredentials(BaseModel):
+    email: str
+    password: str
+    full_name: str
+
+class LoginCredentials(BaseModel):
+    email: str
+    password: str
+
+@app.post("/signup")
+async def signup(credentials: UserCredentials):
+    try:
+        # We can safely use the global client here because we aren't setting a session
+        response = global_supabase.auth.sign_up({
+            "email": credentials.email,
+            "password": credentials.password,
+            "options": {
+                "data": {
+                    "full_name": credentials.full_name # Gets caught by the SQL trigger!
+                }
+            }
+        })
+        return {"message": "User and profile created successfully!"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/my-profile")
+async def get_profile(auth_data: dict = Depends(get_auth_client)):
+    try:
+        # 1. Unpack our per-request client and user from the dependency
+        request_client = auth_data["client"]
+        current_user = auth_data["user"]
+        
+        # 2. Query the database using the temporary, authenticated client
+        response = request_client.table("profiles").select("*").eq("id", current_user.id).single().execute()
+        
+        return response.data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/login")
+async def login(credentials: LoginCredentials):
+    try:
+        # 1. Create a fresh, temporary client just for this login request
+        # This prevents the logged-in session from polluting the global client state!
+        login_client = create_client(URL, KEY)
+        
+        # 2. Authenticate the user with Supabase
+        response = login_client.auth.sign_in_with_password({
+            "email": credentials.email,
+            "password": credentials.password
+        })
+        
+        # 3. Return the JWT access token to the frontend
+        return {
+            "access_token": response.session.access_token,
+            "token_type": "bearer",
+            "user_id": response.user.id
+        }
+    except Exception as e:
+        # Supabase will throw an error if the email/password is wrong
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+
+class AutomateRequest(BaseModel):
+    raw_text: str
+    structure: Optional[str] = "standard"
+
+@app.post("/automate")
+def automate_notes(req: AutomateRequest):
+    try:
+        print("🤖 Processing notes with Gemini (JSON Mode)...")
+        
+        # Configure Gemini API
+        api_key = getattr(config, "GEMINI_API_KEY", "")
+        if not api_key or "YOUR_" in api_key or api_key == "":
+            raise Exception("API key is missing or invalid.")
+            
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        struct_pref = req.structure or "standard"
+        
+        prompt = f"""
+        Act as an expert organizational Secretary General. Process the raw meeting notes and extract the information into a strict JSON format matching the structural rules below.
+
+        FORMAT STRUCTURE PREFERENCE: {struct_pref.upper()}
+
+        CRITICAL STRUCTURAL RULES FOR THE CHOSEN FORMAT:
+        - If STANDARD: Write a balanced 2-3 sentence overview paragraph. Keep decisions precise.
+        - If DETAILED: Write a highly granular, thorough overview log including sub-points or contextual arguments mentioned. Provide highly descriptive tasks.
+        - If CONCISE: Reduce text to a 1-sentence outcome summary and minimal word count bullets.
+
+        You MUST return ONLY a valid JSON object with exactly these keys:
+        - "overview": A string (tailor depth and length strictly to the format preference above).
+        - "decisions": An array of strings.
+        - "actions": An array of objects with keys: "task", "lead", "status", "due".
+          CRITICAL: In the "due" field, if a due date is specified in the notes without a year (e.g., "March 31" or "April 1"), assume the year is 2026. Do NOT use 2024 or other years.
+
+        Raw Notes to Process:
+        {req.raw_text}
+        """
+        
+        # Call Gemini and enforce JSON output
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json"
+            )
+        )
+        
+        # Convert Gemini's text response into a Python dictionary
+        structured_data = json.loads(response.text)
+        
+        # Return the clean JSON object directly to the frontend
+        return structured_data
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI Automation failed: {str(e)}")
+
+class ActionItem(BaseModel):
+    task: str
+    lead: str
+    status: str
+    due: str
+
+class MomContentModel(BaseModel):
+    overview: str
+    decisions: list[str]
+    actions: list[ActionItem]
+
+class SendEmailRequest(BaseModel):
+    summary_text: str
+    file_name: str
+    emails: list[str]
+    mom_content: Optional[MomContentModel] = None
+
+
+@app.post("/send-email")
+def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_auth_client)):
+    # 1. Create a safe PDF locally in the workspace
+    pdf_filename = f"{req.file_name.replace(' ', '_')}_Minutes.pdf"
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_margins(15, 15, 15)
+        
+        # 1. Document Title / Brand Header
+        pdf.set_text_color(80, 45, 85) # Brand Purple (#502D55)
+        pdf.set_font("helvetica", style="B", size=20)
+        pdf.cell(0, 15, text=req.file_name, ln=True, align="L")
+        
+        # Decorative divider line
+        pdf.set_draw_color(80, 45, 85)
+        pdf.set_line_width(0.5)
+        pdf.line(15, 30, 195, 30)
+        pdf.ln(8)
+        
+        if req.mom_content:
+            # RENDER THE NEW LUXURIOUS HIGH-FIDELITY AUTOMATED MOM STRUCTURE!
+            mom = req.mom_content
+            
+            # --- Section 1: Overview & Objectives ---
+            pdf.set_font("helvetica", style="B", size=12)
+            pdf.cell(0, 8, text="1. Overview & Objectives", ln=True)
+            pdf.ln(2)
+            
+            pdf.set_font("helvetica", size=10)
+            pdf.set_text_color(80, 45, 85) # Deep Purple text
+            safe_overview = mom.overview.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(0, 6, text=safe_overview)
+            pdf.ln(6)
+            
+            # --- Section 2: Key Decisions Made ---
+            pdf.set_text_color(80, 45, 85)
+            pdf.set_font("helvetica", style="B", size=12)
+            pdf.cell(0, 8, text="2. Key Decisions Made", ln=True)
+            pdf.ln(2)
+            
+            pdf.set_font("helvetica", size=10)
+            pdf.set_text_color(80, 45, 85)
+            if not mom.decisions:
+                pdf.set_font("helvetica", style="I", size=10)
+                pdf.cell(0, 6, text="No decisions logged.", ln=True)
+            else:
+                for dec in mom.decisions:
+                    safe_dec = dec.encode('latin-1', 'replace').decode('latin-1')
+                    pdf.set_x(20)
+                    pdf.cell(5, 6, text="-", ln=False)
+                    pdf.multi_cell(0, 6, text=safe_dec)
+            pdf.ln(6)
+            
+            # --- Section 3: Action Items & Timeline ---
+            pdf.set_text_color(80, 45, 85)
+            pdf.set_font("helvetica", style="B", size=12)
+            pdf.cell(0, 8, text="3. Action Items & Timeline", ln=True)
+            pdf.ln(3)
+            
+            if not mom.actions:
+                pdf.set_font("helvetica", style="I", size=10)
+                pdf.cell(0, 6, text="No action items defined.", ln=True)
+            else:
+                # Table Headers Setup
+                pdf.set_font("helvetica", style="B", size=9)
+                pdf.set_text_color(255, 255, 255) # White text
+                pdf.set_fill_color(80, 45, 85) # Purple fill
+                
+                col_widths = [90, 30, 30, 30]
+                headers = ["Action Item / Task", "Assigned Lead", "Status", "Due Date"]
+                
+                for i, header in enumerate(headers):
+                    pdf.cell(col_widths[i], 8, text=header, border=1, ln=False, align="C", fill=True)
+                pdf.ln(8)
+                
+                # Table Rows Setup
+                pdf.set_font("helvetica", size=9)
+                for act in mom.actions:
+                    safe_task = act.task.encode('latin-1', 'replace').decode('latin-1')
+                    safe_lead = act.lead.encode('latin-1', 'replace').decode('latin-1')
+                    safe_status = act.status.encode('latin-1', 'replace').decode('latin-1')
+                    safe_due = act.due.encode('latin-1', 'replace').decode('latin-1')
+                    
+                    pdf.set_fill_color(250, 246, 242) # Cream background (#FAF6F2)
+                    pdf.set_text_color(80, 45, 85) # Purple text
+                    
+                    pdf.cell(col_widths[0], 8, text=safe_task[:50], border=1, ln=False, fill=True)
+                    pdf.cell(col_widths[1], 8, text=safe_lead[:18], border=1, ln=False, align="C", fill=True)
+                    pdf.cell(col_widths[2], 8, text=safe_status[:15], border=1, ln=False, align="C", fill=True)
+                    pdf.cell(col_widths[3], 8, text=safe_due[:15], border=1, ln=True, align="C", fill=True)
+        else:
+            # Fallback to plain text PDF if mom_content is not supplied
+            pdf.set_font("helvetica", size=11)
+            pdf.cell(0, 10, text="Minutes of Meeting", ln=True, align="C")
+            pdf.ln(5)
+            
+            pdf.set_font("helvetica", style="B", size=12)
+            pdf.cell(0, 10, text=f"Subject: {req.file_name}", ln=True)
+            pdf.ln(5)
+            
+            pdf.set_font("helvetica", size=11)
+            safe_text = req.summary_text.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(0, 6, text=safe_text)
+            
+        pdf.output(pdf_filename)
+    except Exception as pdf_err:
+        print(f"❌ Failed to construct PDF: {pdf_err}")
+        pdf_filename = None
+
+    # 2. Setup SMTP distribution credentials
+    # SMTP authentication requires the username to strictly match the APP_PASSWORD's account.
+    smtp_username = getattr(config, "SENDER_EMAIL", "")
+    smtp_password = getattr(config, "APP_PASSWORD", "")
+    
+    # Represent the active logged-in user dynamically in headers
+    logged_in_email = auth_data["user"].email if (auth_data and "user" in auth_data) else smtp_username
+    
+    if not smtp_username or "YOUR_" in smtp_username or not smtp_password or "YOUR_" in smtp_password:
+        print("⚠️ SMTP SENDER_EMAIL or APP_PASSWORD not configured. Saved PDF locally instead!")
+        return {
+            "success": True,
+            "message": "Saved PDF document locally in workspace directory! (Email was not sent because config.py credentials are not configured yet.)",
+            "pdf_path": pdf_filename
+        }
+
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = f"📝 Meeting Summary & Action Items: {req.file_name}"
+        msg['From'] = f"{logged_in_email} <{smtp_username}>"
+        msg['Reply-To'] = logged_in_email
+        msg['To'] = ", ".join(req.emails)
+        msg.set_content(f"Hello Team,\n\nPlease find the automated summary and action items of our meeting below. The official PDF document is also attached for your records.\n\n---\n\n{req.summary_text}")
+
+        # Attach the generated PDF
+        if pdf_filename and os.path.exists(pdf_filename):
+            with open(pdf_filename, 'rb') as f:
+                pdf_data = f.read()
+            msg.add_attachment(
+                pdf_data, 
+                maintype='application', 
+                subtype='pdf', 
+                filename=os.path.basename(pdf_filename)
+            )
+
+        # Connect to Gmail SMTP server using authenticated central credentials
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            smtp.login(smtp_username, smtp_password)
+            smtp.send_message(msg)
+        
+        print("✅ Success! Dynamic emails sent to recipients.")
+        return {
+            "success": True,
+            "message": f"Successfully distributed Meeting Minutes to {len(req.emails)} recipients!",
+            "pdf_path": pdf_filename
+        }
+    except Exception as smtp_err:
+        print(f"❌ Failed to send email via SMTP: {smtp_err}")
+        return {
+            "success": False,
+            "message": f"SMTP Error: {str(smtp_err)}. PDF document has been successfully saved locally.",
+            "pdf_path": pdf_filename
+        }

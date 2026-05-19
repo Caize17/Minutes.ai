@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "../backend/supabase/client";
 
 // Back Arrow Vector Icon
 const BackIcon = () => (
@@ -28,7 +29,7 @@ const TrashIcon = () => (
 );
 
 interface TeamCard {
-  id: number;
+  id: string; // Updated to string to support UUIDs from Supabase
   title: string;
   edited: string;
   type: 'draft' | 'mom';
@@ -40,21 +41,128 @@ interface TeamCard {
 
 interface TeamProps {
   onViewChange: (view: 'home' | 'login' | 'signup' | 'dashboard' | 'team' | 'file' | 'about' | 'creators' | 'trash') => void;
+  teamId?: string | null;
+  onSelectFile?: (id: string) => void;
+  
+  // Local states
+  teams?: any[];
+  documents?: any[];
+  onUpdateTeams?: (newTeams: any[]) => void;
+  onUpdateDocuments?: (newDocs: any[]) => void;
 }
 
-export default function Team({ onViewChange }: TeamProps) {
-  const [recipients, setRecipients] = useState<string[]>([
-    "clara.santos@mail.com",
-    "marcelo.cruz@mail.com",
-    "marcos.perez@mail.com"
-  ]);
+export default function Team({ 
+  onViewChange, 
+  teamId, 
+  onSelectFile,
+  teams = [],
+  documents = [],
+  onUpdateTeams,
+  onUpdateDocuments
+}: TeamProps) {
+  const [teamName, setTeamName] = useState("Your Team Name");
+  const [recipients, setRecipients] = useState<string[]>([]);
   const [showInput, setShowInput] = useState(false);
   const [newEmail, setNewEmail] = useState("");
+  const [isUploadDrawerOpen, setIsUploadDrawerOpen] = useState(false);
+  const [uploadStep, setUploadStep] = useState<'idle' | 'uploading' | 'success'>('idle');
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setUploadedFileName(file.name);
+    setUploadStep('uploading');
+    
+    let activeTeamId = teamId;
+    if (!activeTeamId && teams.length > 0) {
+      activeTeamId = teams[0].id;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const fileContent = (e.target?.result as string) || "";
+      
+      const newDoc = {
+        id: `doc-${Date.now()}`,
+        team_id: activeTeamId,
+        title: file.name.replace(/\.[^/.]+$/, ""),
+        type: 'draft',
+        content: fileContent,
+        summary: "",
+        decisions: [],
+        action_items: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      setTimeout(() => {
+        setUploadStep('success');
+        if (onUpdateDocuments) {
+          onUpdateDocuments([newDoc, ...documents]);
+        }
+        if (onSelectFile) onSelectFile(newDoc.id);
+      }, 1000);
+    };
+
+    reader.onerror = () => {
+      alert("Failed to read the file.");
+      setUploadStep('idle');
+    };
+
+    reader.readAsText(file);
+  };
+
+  const closeUploadDrawer = () => {
+    setIsUploadDrawerOpen(false);
+    setUploadStep('idle');
+    setUploadedFileName("");
+  };
 
   const [momStructure, setMomStructure] = useState<'standard' | 'detailed' | 'concise'>('standard');
 
   const handleStructureChange = (structure: 'standard' | 'detailed' | 'concise') => {
     setMomStructure(structure);
+    
+    let activeTeamId = teamId;
+    if (!activeTeamId && teams.length > 0) {
+      activeTeamId = teams[0].id;
+    }
+    
+    if (activeTeamId && onUpdateTeams) {
+      const updatedTeams = teams.map(t => {
+        if (t.id === activeTeamId) {
+          return { ...t, structure: structure };
+        }
+        return t;
+      });
+      onUpdateTeams(updatedTeams);
+    }
+
     const label = structure === 'standard' ? 'Standard' : structure === 'detailed' ? 'Detailed' : 'Concise';
     triggerNotification(`AI Minutes format updated to "${label}" structure successfully!`);
   };
@@ -63,34 +171,121 @@ export default function Team({ onViewChange }: TeamProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<'all' | 'draft' | 'mom'>('all');
 
-  // Highly premium, structured metadata files state
-  const [cards, setCards] = useState<TeamCard[]>([
-    { id: 1, title: "GDGoC's Meeting", edited: "Edited Just now", type: "mom", status: "Completed MOM", actionsCount: 3, decisionsCount: 2, summary: "Reviewed Google Automation Python script markers and timelines." },
-    { id: 2, title: "Relation's Meeting", edited: "Edited 12 hours ago", type: "draft", status: "Draft Note", actionsCount: 0, decisionsCount: 0, summary: "Raw notes on client dynamic routing flat prototypes." },
-    { id: 3, title: "Marketing Synch", edited: "Edited 1 day ago", type: "mom", status: "Completed MOM", actionsCount: 4, decisionsCount: 3, summary: "Social media outreach guidelines and banner assets reviews." },
-    { id: 4, title: "Design Sprint Notes", edited: "Edited 2 days ago", type: "draft", status: "Draft Note", actionsCount: 0, decisionsCount: 0, summary: "Brainstorming warm peach and cream gradient templates." },
-    { id: 5, title: "Product Roadmap", edited: "Edited 3 days ago", type: "mom", status: "Completed MOM", actionsCount: 5, decisionsCount: 4, summary: "Quarterly timeline roadmap commitments for core flat APIs." },
-    { id: 6, title: "Launch Timeline Review", edited: "Edited 5 days ago", type: "mom", status: "Completed MOM", actionsCount: 2, decisionsCount: 1, summary: "Pre-production test suite verification checklists." },
-    { id: 7, title: "Engineering Sync", edited: "Edited 1 week ago", type: "draft", status: "Draft Note", actionsCount: 0, decisionsCount: 0, summary: "Raw notes on typescript types interface alignment." },
-    { id: 8, title: "Operations Planning", edited: "Edited 2 weeks ago", type: "mom", status: "Completed MOM", actionsCount: 3, decisionsCount: 2, summary: "Workspace directories flat structure alignments." }
-  ]);
+  const [cards, setCards] = useState<TeamCard[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    setIsLoading(true);
+    let activeTeamId = teamId;
+    if (!activeTeamId && teams.length > 0) {
+      activeTeamId = teams[0].id;
+    }
+
+    if (activeTeamId) {
+      const activeTeam = teams.find(t => t.id === activeTeamId);
+      if (activeTeam) {
+        setTeamName(activeTeam.name || "Your Team");
+        setRecipients(activeTeam.recipients || []);
+        setMomStructure(activeTeam.structure || 'standard');
+      }
+
+      const teamDocs = documents.filter(d => d.team_id === activeTeamId && !d.deleted);
+      setCards(teamDocs.map(doc => ({
+        id: doc.id,
+        title: doc.title,
+        edited: `Edited ${new Date(doc.updated_at || doc.created_at).toLocaleDateString()}`,
+        type: doc.type || 'draft',
+        status: doc.type === 'mom' ? 'Completed MOM' : 'Draft Note',
+        actionsCount: doc.action_items?.length || 0,
+        decisionsCount: doc.decisions?.length || 0,
+        summary: doc.summary || doc.content || ""
+      })));
+    }
+    setIsLoading(false);
+  }, [teamId, teams, documents]);
 
   const [notification, setNotification] = useState<string | null>(null);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<TeamCard | null>(null);
 
-  const handleAddEmail = (e: React.FormEvent) => {
+  const handleAddEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newEmail.trim();
     if (trimmed && trimmed.includes("@")) {
-      setRecipients([...recipients, trimmed]);
+      const updatedRecipients = [...recipients, trimmed];
+      setRecipients(updatedRecipients);
       setNewEmail("");
       setShowInput(false);
+      
+      let activeTeamId = teamId;
+      if (!activeTeamId && teams.length > 0) {
+        activeTeamId = teams[0].id;
+      }
+      
+      if (activeTeamId && onUpdateTeams) {
+        const updatedTeams = teams.map(t => {
+          if (t.id === activeTeamId) {
+            return { ...t, recipients: updatedRecipients };
+          }
+          return t;
+        });
+        onUpdateTeams(updatedTeams);
+      }
+      triggerNotification("Collaborator invited successfully!");
     }
   };
 
-  const removeRecipient = (indexToRemove: number) => {
-    setRecipients(recipients.filter((_, idx) => idx !== indexToRemove));
+  const removeRecipient = async (indexToRemove: number) => {
+    const emailToRemove = recipients[indexToRemove];
+    const updatedRecipients = recipients.filter((_, idx) => idx !== indexToRemove);
+    setRecipients(updatedRecipients);
+    
+    let activeTeamId = teamId;
+    if (!activeTeamId && teams.length > 0) {
+      activeTeamId = teams[0].id;
+    }
+    
+    if (activeTeamId && onUpdateTeams) {
+      const updatedTeams = teams.map(t => {
+        if (t.id === activeTeamId) {
+          return { ...t, recipients: updatedRecipients };
+        }
+        return t;
+      });
+      onUpdateTeams(updatedTeams);
+    }
+    triggerNotification("Collaborator removed successfully.");
+  };
+
+  const handleDeleteTeam = () => {
+    let activeTeamId = teamId;
+    if (!activeTeamId && teams.length > 0) {
+      activeTeamId = teams[0].id;
+    }
+    if (!activeTeamId) return;
+
+    if (window.confirm("Are you sure you want to move this team and all of its associated documents to the Trash?")) {
+      if (onUpdateTeams) {
+        const updatedTeams = teams.map(t => {
+          if (t.id === activeTeamId) {
+            return { ...t, deleted: true, deletedAt: new Date().toISOString() };
+          }
+          return t;
+        });
+        onUpdateTeams(updatedTeams);
+      }
+      if (onUpdateDocuments) {
+        const updatedDocs = documents.map(d => {
+          if (d.team_id === activeTeamId) {
+            return { ...d, deleted: true, deletedAt: new Date().toISOString() };
+          }
+          return d;
+        });
+        onUpdateDocuments(updatedDocs);
+      }
+      onViewChange('dashboard');
+    }
   };
 
   const triggerNotification = (message: string) => {
@@ -105,10 +300,16 @@ export default function Team({ onViewChange }: TeamProps) {
     setIsConfirmModalOpen(true);
   };
 
-  const handleConfirmDelete = () => {
-    if (selectedCard) {
-      setCards(cards.filter(c => c.id !== selectedCard.id));
-      triggerNotification(`"${selectedCard.title}" has been successfully moved to Trash.`);
+  const handleConfirmDelete = async () => {
+    if (selectedCard && onUpdateDocuments) {
+      const updatedDocs = documents.map(d => {
+        if (d.id === selectedCard.id) {
+          return { ...d, deleted: true, deletedAt: new Date().toISOString() };
+        }
+        return d;
+      });
+      onUpdateDocuments(updatedDocs);
+      triggerNotification(`"${selectedCard.title}" has been moved to Trash.`);
       setSelectedCard(null);
     }
     setIsConfirmModalOpen(false);
@@ -193,19 +394,64 @@ export default function Team({ onViewChange }: TeamProps) {
             </button>
 
             {/* Quick Actions */}
-            <button 
-              onClick={() => onViewChange('file')}
-              className="flex items-center gap-2 bg-[#502D55] hover:bg-[#502D55]/95 text-white font-plus-jakarta font-bold text-xs px-5 py-3 rounded-xl transition-all duration-200 active:scale-[0.98] cursor-pointer"
-            >
-              <span>+ Create Note</span>
-            </button>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={handleDeleteTeam}
+                className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 font-plus-jakarta font-bold text-xs rounded-xl transition-all duration-200 cursor-pointer flex items-center gap-2"
+              >
+                <TrashIcon />
+                Delete Team
+              </button>
+              <button 
+                onClick={() => setIsUploadDrawerOpen(true)}
+                className="flex items-center gap-2 border border-[#502D55]/30 hover:bg-[#502D55]/5 text-[#502D55] font-plus-jakarta font-bold text-xs px-5 py-3 rounded-xl transition-all duration-200 active:scale-[0.98] cursor-pointer"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <span>Upload Text</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  let activeTeamId = teamId;
+                  if (!activeTeamId && teams.length > 0) {
+                    activeTeamId = teams[0].id;
+                  }
+
+                  const newDoc = {
+                    id: `doc-${Date.now()}`,
+                    team_id: activeTeamId,
+                    title: "Untitled Draft",
+                    type: "draft",
+                    content: "",
+                    summary: "",
+                    decisions: [],
+                    action_items: [],
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  };
+
+                  if (onUpdateDocuments) {
+                    onUpdateDocuments([newDoc, ...documents]);
+                  }
+                  if (onSelectFile) onSelectFile(newDoc.id);
+                  onViewChange('file');
+                }}
+                className="flex items-center gap-2 bg-[#502D55] hover:bg-[#502D55]/95 text-white font-plus-jakarta font-bold text-xs px-5 py-3 rounded-xl transition-all duration-200 active:scale-[0.98] cursor-pointer"
+              >
+                <span>+ Create Note</span>
+              </button>
+            </div>
           </div>
 
           {/* Premium Collaborative Team Banner Header Card */}
           <div className="w-full max-w-[1200px] mx-auto bg-[#FAF6F2] border border-[#502D55]/5 rounded-[32px] p-6 md:p-8 shadow-sm mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 animate-fade-in">
             <div>
               <h1 className="font-plus-jakarta font-extrabold text-3xl md:text-[38px] text-[#502D55] tracking-tight leading-none">
-                Your Team Name
+                {teamName}
               </h1>
               <p className="font-hanken text-xs text-[#502D55]/60 mt-2 font-semibold">
                 Established May 18, 2026 • Registered Academic Group
@@ -276,7 +522,10 @@ export default function Team({ onViewChange }: TeamProps) {
               {filteredCards.map((item) => (
                 <div 
                   key={item.id}
-                  onClick={() => onViewChange('file')}
+                  onClick={() => {
+                    if (onSelectFile) onSelectFile(item.id);
+                    onViewChange('file');
+                  }}
                   className="bg-[#FAF6F2] hover:scale-[1.015] hover:shadow-md hover:bg-[#FAF6F2]/95 rounded-[24px] p-6 min-h-[220px] flex flex-col justify-between transition-all duration-300 shadow-sm border-t-[5px] border-x border-b border-[#502D55]/5 group relative cursor-pointer"
                   style={{ borderTopColor: item.type === 'mom' ? '#502D55' : '#935073' }}
                 >
@@ -480,6 +729,119 @@ export default function Team({ onViewChange }: TeamProps) {
         </div>
 
       </aside>
+
+      {/* Drag & Drop File Upload Modal Overlay */}
+      {isUploadDrawerOpen && (
+        <div className="fixed inset-0 bg-[#502D55]/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all duration-200">
+          
+          <div className="w-full max-w-[550px] bg-[#FAF6F2] rounded-[32px] p-8 md:p-10 shadow-2xl border border-[#502D55]/5 transform transition-all scale-100 animate-fade-in relative">
+            
+            {/* Close button */}
+            <button 
+              onClick={closeUploadDrawer}
+              className="absolute top-6 right-6 w-8 h-8 rounded-full bg-[#502D55]/5 hover:bg-[#502D55]/10 flex items-center justify-center text-[#502D55]/70 hover:text-[#502D55] transition-colors font-bold text-sm cursor-pointer"
+            >
+              ✕
+            </button>
+
+            {/* Header */}
+            <div className="mb-6 text-center">
+              <h2 className="font-plus-jakarta font-extrabold text-[#502D55] text-2xl md:text-3xl tracking-tight leading-none mb-3">
+                Upload Meeting Note
+              </h2>
+              <p className="font-hanken text-sm text-[#502D55]/85 leading-relaxed">
+                Drop your raw text file or transcript here to generate automated minutes.
+              </p>
+            </div>
+
+            {uploadStep === 'idle' && (
+              <div 
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`w-full border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-all ${
+                  isDragging 
+                    ? 'border-[#502D55] bg-[#F3DDC8]/40 scale-[1.01]' 
+                    : 'border-[#502D55]/20 bg-[#FAF6F2] hover:border-[#502D55]/40 hover:bg-[#F3DDC8]/10'
+                }`}
+              >
+                <div className="w-14 h-14 rounded-full bg-[#502D55]/5 flex items-center justify-center text-[#502D55]/70 mb-4 animate-bounce">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                </div>
+                
+                <p className="font-plus-jakarta font-bold text-sm text-[#502D55] mb-1">
+                  Drag & Drop transcript here
+                </p>
+                <p className="font-hanken text-[11px] text-[#502D55]/60 mb-5">
+                  Supports .txt, .docx files up to 10MB
+                </p>
+
+                <label 
+                  htmlFor="file-select"
+                  className="bg-[#502D55] hover:bg-[#502D55]/95 text-white font-plus-jakarta font-bold text-xs py-3 px-6 rounded-xl transition-all shadow-md active:scale-[0.98] cursor-pointer"
+                >
+                  Choose File
+                </label>
+                <input 
+                  type="file" 
+                  id="file-select" 
+                  accept=".txt,.docx"
+                  className="hidden" 
+                  onChange={handleFileSelect} 
+                />
+              </div>
+            )}
+
+            {uploadStep === 'uploading' && (
+              <div className="w-full bg-[#FAF6F2] border border-[#502D55]/5 rounded-2xl p-10 flex flex-col items-center justify-center gap-4">
+                <div className="w-10 h-10 border-4 border-[#502D55] border-t-transparent rounded-full animate-spin"></div>
+                <div className="text-center">
+                  <p className="font-plus-jakarta font-bold text-sm text-[#502D55]">Parsing transcript content...</p>
+                  <p className="font-hanken text-xs text-[#502D55]/60 mt-1">{uploadedFileName}</p>
+                </div>
+              </div>
+            )}
+
+            {uploadStep === 'success' && (
+              <div className="w-full bg-[#FAF6F2] border border-[#502D55]/5 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
+                <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                </div>
+
+                <h3 className="font-plus-jakarta font-bold text-lg text-[#502D55] mb-1">
+                  Upload Successful!
+                </h3>
+                <p className="font-hanken text-xs text-[#502D55]/60 mb-6">
+                  "{uploadedFileName}" successfully parsed into structured text notes.
+                </p>
+
+                <div className="flex gap-4 w-full">
+                  <button 
+                    onClick={() => setUploadStep('idle')}
+                    className="flex-1 border-2 border-[#502D55]/60 hover:bg-[#502D55]/5 text-[#502D55] font-plus-jakarta font-bold text-xs py-3 rounded-xl transition-all cursor-pointer"
+                  >
+                    Upload Another
+                  </button>
+                  <button 
+                    onClick={() => { closeUploadDrawer(); onViewChange('file'); }}
+                    className="flex-1 bg-[#502D55] hover:bg-[#502D55]/95 text-white font-plus-jakarta font-bold text-xs py-3 rounded-xl transition-all shadow-md active:scale-[0.98] cursor-pointer"
+                  >
+                    Continue to MOM
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+        </div>
+      )}
 
     </div>
   );
