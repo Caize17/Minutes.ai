@@ -363,13 +363,13 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
                 filename=os.path.basename(pdf_filename)
             )
 
-        # Connect to dynamic SMTP server with SSL or STARTTLS support
+        # Connect to dynamic SMTP server with SSL or STARTTLS support (timeout to prevent hanging)
         if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port) as smtp:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as smtp:
                 smtp.login(smtp_username, smtp_password)
                 smtp.send_message(msg)
         else:
-            with smtplib.SMTP(smtp_host, smtp_port) as smtp:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
                 smtp.starttls()
                 smtp.login(smtp_username, smtp_password)
                 smtp.send_message(msg)

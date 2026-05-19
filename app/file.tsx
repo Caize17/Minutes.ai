@@ -337,11 +337,14 @@ ${actionsText || "None recorded."}
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || data.detail || "Failed to distribute MOM.");
+      }
       setNotificationMessage(data.message || "MOM distributed successfully!");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setNotificationMessage("MOM successfully distributed! (Dynamic backup local PDF successfully constructed.)");
+      setNotificationMessage(err.message || "Failed to distribute MOM.");
     }
 
     setTimeout(() => {
