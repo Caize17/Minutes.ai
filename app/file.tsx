@@ -225,6 +225,9 @@ export default function File({
       // Clean HTML tags from the draft content so the AI only reads the raw text
       const cleanText = draftContent.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
 
+      console.log("[AI Automation] Sending request to endpoint:", `${API_BASE_URL}/automate`);
+      console.log("[AI Automation] Clean transcript text size:", cleanText.length);
+
       const response = await fetch(`${API_BASE_URL}/automate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -234,12 +237,16 @@ export default function File({
         })
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.detail || "AI Automation failed on the server.");
-      }
+      console.log("[AI Automation] Response status:", response.status, response.statusText);
+      const data = await response.json().catch((e) => {
+        console.warn("[AI Automation] Response is not valid JSON:", e);
+        return {};
+      });
+      console.log("[AI Automation] Parsed response body data:", data);
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || `Server error ${response.status}: AI Automation failed on the server.`);
+      }
 
       clearInterval(progInterval);
       setAutomationProgress(100);
