@@ -307,10 +307,31 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
         print(f"❌ Failed to construct PDF: {pdf_err}")
         pdf_filename = None
 
-    # 2. Setup SMTP distribution credentials
-    # SMTP authentication requires the username to strictly match the APP_PASSWORD's account.
-    smtp_username = getattr(config, "SENDER_EMAIL", "")
-    smtp_password = getattr(config, "APP_PASSWORD", "")
+    # 2. Setup SMTP distribution credentials (checking user_metadata first)
+    smtp_host = "smtp.gmail.com"
+    smtp_port = 465
+    smtp_username = ""
+    smtp_password = ""
+    
+    if auth_data and "user" in auth_data:
+        user = auth_data["user"]
+        meta = getattr(user, "user_metadata", {}) or {}
+        smtp_host = meta.get("smtp_host") or ""
+        smtp_port_val = meta.get("smtp_port")
+        if smtp_port_val:
+            try:
+                smtp_port = int(smtp_port_val)
+            except ValueError:
+                smtp_port = 465
+        smtp_username = meta.get("smtp_username") or ""
+        smtp_password = meta.get("smtp_password") or ""
+        
+    # If not configured in user_metadata, fallback to central smtp credentials
+    if not smtp_username or not smtp_password:
+        smtp_username = getattr(config, "SENDER_EMAIL", "")
+        smtp_password = getattr(config, "APP_PASSWORD", "")
+        smtp_host = "smtp.gmail.com"
+        smtp_port = 465
     
     # Represent the active logged-in user dynamically in headers
     logged_in_email = auth_data["user"].email if (auth_data and "user" in auth_data) else smtp_username
@@ -319,7 +340,7 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
         print("⚠️ SMTP SENDER_EMAIL or APP_PASSWORD not configured. Saved PDF locally instead!")
         return {
             "success": True,
-            "message": "Saved PDF document locally in workspace directory! (Email was not sent because config.py credentials are not configured yet.)",
+            "message": "Saved PDF document locally in workspace directory! (Email was not sent because SMTP credentials are not configured yet.)",
             "pdf_path": pdf_filename
         }
 
@@ -342,10 +363,16 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
                 filename=os.path.basename(pdf_filename)
             )
 
-        # Connect to Gmail SMTP server using authenticated central credentials
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(smtp_username, smtp_password)
-            smtp.send_message(msg)
+        # Connect to dynamic SMTP server with SSL or STARTTLS support
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port) as smtp:
+                smtp.login(smtp_username, smtp_password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port) as smtp:
+                smtp.starttls()
+                smtp.login(smtp_username, smtp_password)
+                smtp.send_message(msg)
         
         print("✅ Success! Dynamic emails sent to recipients.")
         return {

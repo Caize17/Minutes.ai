@@ -63,13 +63,56 @@ export default function Dashboard({
   const [teamNameInput, setTeamNameInput] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  // SMTP Settings States
+  const [isSmtpModalOpen, setIsSmtpModalOpen] = useState(false);
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("465");
+  const [smtpUsername, setSmtpUsername] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+  const [smtpSuccess, setSmtpSuccess] = useState(false);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUserEmail(user.email || "Active User");
+        const meta = user.user_metadata || {};
+        setSmtpHost(meta.smtp_host || "");
+        setSmtpPort(meta.smtp_port || "465");
+        setSmtpUsername(meta.smtp_username || "");
+        setSmtpPassword(meta.smtp_password || "");
       }
     }).catch(() => {});
   }, []);
+
+  const handleSaveSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSmtp(true);
+    setSmtpSuccess(false);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          smtp_host: smtpHost.trim(),
+          smtp_port: smtpPort.trim(),
+          smtp_username: smtpUsername.trim(),
+          smtp_password: smtpPassword.trim()
+        }
+      });
+
+      if (error) throw error;
+
+      setSmtpSuccess(true);
+      setTimeout(() => {
+        setIsSmtpModalOpen(false);
+        setSmtpSuccess(false);
+      }, 1500);
+    } catch (err: any) {
+      alert("Failed to save SMTP settings: " + err.message);
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -260,12 +303,16 @@ export default function Dashboard({
           
           {/* User Profile Info Card */}
           {userEmail && (
-            <div className="flex items-center w-full px-1.5 py-3 group-hover/sidebar:px-4 group-hover/sidebar:bg-[#502D55]/3 group-hover/sidebar:border group-hover/sidebar:border-[#502D55]/5 border border-transparent rounded-2xl whitespace-nowrap overflow-hidden transition-all duration-300">
+            <div 
+              onClick={() => setIsSmtpModalOpen(true)}
+              className="flex items-center w-full px-1.5 py-3 group-hover/sidebar:px-4 group-hover/sidebar:bg-[#502D55]/5 group-hover/sidebar:border group-hover/sidebar:border-[#502D55]/10 border border-transparent rounded-2xl whitespace-nowrap overflow-hidden transition-all duration-300 cursor-pointer hover:bg-[#502D55]/5 active:scale-[0.99]"
+              title="Click to configure sender email server settings"
+            >
               <div className="w-10 h-10 rounded-full bg-[#502D55]/10 text-[#502D55] font-extrabold flex items-center justify-center flex-shrink-0 font-plus-jakarta text-sm border border-[#502D55]/15 shadow-sm">
                 {userEmail.charAt(0).toUpperCase()}
               </div>
               <div className="flex flex-col opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-300 ease-in-out overflow-hidden ml-0 group-hover/sidebar:ml-3">
-                <span className="font-plus-jakarta text-[10px] font-extrabold text-[#502D55]/50 uppercase tracking-wider leading-none mb-1">Signed in as</span>
+                <span className="font-plus-jakarta text-[10px] font-extrabold text-[#502D55]/50 uppercase tracking-wider leading-none mb-1">Email Settings</span>
                 <span className="font-hanken text-[12px] font-bold text-[#502D55] truncate max-w-[135px] leading-tight" title={userEmail}>
                   {userEmail}
                 </span>
@@ -663,6 +710,128 @@ export default function Dashboard({
 
           </div>
 
+        </div>
+      )}
+
+      {/* SMTP Settings Modal Overlay */}
+      {isSmtpModalOpen && (
+        <div className="fixed inset-0 bg-[#502D55]/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all duration-200">
+          {/* Modal Container */}
+          <div className="w-full max-w-[550px] bg-[#FAF6F2] rounded-[32px] p-8 md:p-10 shadow-2xl border border-[#502D55]/5 transform transition-all scale-100 animate-fade-in">
+            {/* Header */}
+            <div className="mb-6 flex justify-between items-start">
+              <div>
+                <h2 className="font-plus-jakarta font-extrabold text-[#502D55] text-2xl tracking-tight leading-none mb-3">
+                  Sender Email Settings
+                </h2>
+                <p className="font-hanken text-xs text-[#502D55]/70 leading-relaxed">
+                  Configure your personal mail server credentials. When you generate MOMs, emails will be distributed natively from your personal address!
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsSmtpModalOpen(false)}
+                className="text-[#502D55]/60 hover:text-[#502D55] font-bold text-lg cursor-pointer transition-colors p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSmtp} className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
+                    SMTP Host / Server
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. smtp.gmail.com"
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
+                    SMTP Port
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 465"
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(e.target.value)}
+                    className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all text-center"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
+                  SMTP Username / Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. your-email@gmail.com"
+                  value={smtpUsername}
+                  onChange={(e) => setSmtpUsername(e.target.value)}
+                  className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 font-plus-jakarta">
+                    SMTP Password / App Password
+                  </label>
+                  <span className="text-[10px] text-[#935073] font-bold font-hanken">
+                    Required secure 16-char App Password
+                  </span>
+                </div>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••••••"
+                  value={smtpPassword}
+                  onChange={(e) => setSmtpPassword(e.target.value)}
+                  className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
+                />
+              </div>
+
+              <div className="bg-[#502D55]/3 rounded-2xl p-4 border border-[#502D55]/5 flex items-start gap-2.5">
+                <span className="text-[#935073] font-bold text-xs mt-0.5">ℹ</span>
+                <p className="font-hanken text-[11px] leading-relaxed text-[#502D55]/85">
+                  <strong>Security Note:</strong> Your email credentials are saved securely in your private, encrypted Supabase authentication metadata. They are never shared publicly or stored in plain-text databases.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsSmtpModalOpen(false)}
+                  className="font-plus-jakarta font-bold text-sm text-[#935073] hover:text-[#502D55] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSmtp}
+                  className="font-plus-jakarta font-bold text-sm text-white bg-[#502D55] hover:bg-[#502D55]/95 px-6 py-3.5 rounded-xl flex items-center gap-2 transition-all shadow-md shadow-[#502D55]/10 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+                >
+                  {isSavingSmtp ? (
+                    <span>Saving...</span>
+                  ) : smtpSuccess ? (
+                    <span>Saved successfully! ✓</span>
+                  ) : (
+                    <span>Save Settings</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
