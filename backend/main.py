@@ -382,6 +382,12 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
             if pdf_filename and os.path.exists(pdf_filename):
                 with open(pdf_filename, "rb") as f:
                     pdf_bytes = f.read()
+
+                encoded_pdf = base64.b64encode(pdf_bytes).decode("ascii").replace("\n", "").replace("\r", "")
+                attachments.append({
+                    "content": encoded_pdf,
+                    "filename": os.path.basename(pdf_filename)
+                })
                 pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
                 attachments.append({
                     "filename": os.path.basename(pdf_filename),
@@ -389,8 +395,8 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
                 })
                 
             payload = {
-                "from": f"{logged_in_email.split('@')[0]} <{smtp_username}>",
-                "to": req.emails,
+                "from": "Minutes Automation <onboarding@resend.dev>",
+                "to": "[EMAIL_ADDRESS]",
                 "reply_to": logged_in_email,
                 "subject": f"📝 Meeting Summary & Action Items: {req.file_name}",
                 "text": f"Hello Team,\n\nPlease find the automated summary and action items of our meeting below. The official PDF document is also attached for your records.\n\n---\n\n{req.summary_text}"
@@ -402,10 +408,11 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
             req_obj = urllib.request.Request(
                 api_url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {smtp_password}",
-                    "Content-Type": "application/json"
-                },
+                headers = {
+    "Authorization": f"Bearer {resend_api_key}",
+    "Content-Type": "application/json",
+    "User-Agent": "MOM-Automation-App/1.0"  
+},
                 method="POST"
             )
             
