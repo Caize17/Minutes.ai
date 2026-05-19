@@ -114,6 +114,27 @@ export default function Dashboard({
     }
   };
 
+  const handleEmailChange = (val: string) => {
+    setSmtpUsername(val);
+    const email = val.trim().toLowerCase();
+    if (email.includes("@")) {
+      const domain = email.split("@")[1];
+      if (domain === "gmail.com") {
+        setSmtpHost("smtp.gmail.com");
+        setSmtpPort("465");
+      } else if (domain === "yahoo.com" || domain === "ymail.com") {
+        setSmtpHost("smtp.mail.yahoo.com");
+        setSmtpPort("465");
+      } else if (domain === "outlook.com" || domain === "hotmail.com" || domain === "live.com") {
+        setSmtpHost("smtp-mail.outlook.com");
+        setSmtpPort("587");
+      } else if (domain === "aol.com") {
+        setSmtpHost("smtp.aol.com");
+        setSmtpPort("465");
+      }
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     onViewChange('home');
@@ -775,7 +796,7 @@ export default function Dashboard({
                   required
                   placeholder="e.g. your-email@gmail.com"
                   value={smtpUsername}
-                  onChange={(e) => setSmtpUsername(e.target.value)}
+                  onChange={(e) => handleEmailChange(e.target.value)}
                   className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
                 />
               </div>
