@@ -41,6 +41,7 @@ export default function File({
   onUpdateTeams,
   onUpdateDocuments
 }: FileProps) {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   const [activeTab, setActiveTab] = useState<'draft' | 'mom'>('draft');
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("Meeting Minutes successfully distributed to all recipients!");
@@ -224,7 +225,7 @@ export default function File({
       // Clean HTML tags from the draft content so the AI only reads the raw text
       const cleanText = draftContent.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
 
-      const response = await fetch('http://localhost:8000/automate', {
+      const response = await fetch(`${API_BASE_URL}/automate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -321,7 +322,7 @@ ${actionsText || "None recorded."}
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const response = await fetch('http://localhost:8000/send-email', {
+      const response = await fetch(`${API_BASE_URL}/send-email`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
