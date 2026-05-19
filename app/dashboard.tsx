@@ -765,11 +765,10 @@ export default function Dashboard({
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. smtp.gmail.com"
+                    readOnly
+                    placeholder="Auto-detected from email..."
                     value={smtpHost}
-                    onChange={(e) => setSmtpHost(e.target.value)}
-                    className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
+                    className="w-full bg-[#502D55]/5 border border-[#502D55]/10 rounded-xl px-4 py-3 text-sm text-[#502D55]/60 font-hanken font-semibold transition-all cursor-not-allowed outline-none select-none"
                   />
                 </div>
                 <div>
@@ -778,11 +777,10 @@ export default function Dashboard({
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. 465"
+                    readOnly
+                    placeholder="—"
                     value={smtpPort}
-                    onChange={(e) => setSmtpPort(e.target.value)}
-                    className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all text-center"
+                    className="w-full bg-[#502D55]/5 border border-[#502D55]/10 rounded-xl px-4 py-3 text-sm text-[#502D55]/60 font-hanken font-semibold transition-all text-center cursor-not-allowed outline-none select-none"
                   />
                 </div>
               </div>
