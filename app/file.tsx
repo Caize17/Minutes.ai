@@ -323,6 +323,14 @@ ${actionsText || "None recorded."}
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
+      console.log("[MOM Distribution] Sending request to endpoint:", `${API_BASE_URL}/send-email`);
+      console.log("[MOM Distribution] Payload:", {
+        summary_text: fullSummaryText,
+        file_name: fileName,
+        emails: emails,
+        mom_content: momContent
+      });
+
       const response = await fetch(`${API_BASE_URL}/send-email`, {
         method: 'POST',
         headers: { 
@@ -337,13 +345,19 @@ ${actionsText || "None recorded."}
         })
       });
 
-      const data = await response.json().catch(() => ({}));
+      console.log("[MOM Distribution] Response status:", response.status, response.statusText);
+      const data = await response.json().catch((e) => {
+        console.warn("[MOM Distribution] Response is not valid JSON:", e);
+        return {};
+      });
+      console.log("[MOM Distribution] Parsed response body data:", data);
+
       if (!response.ok) {
-        throw new Error(data.message || data.detail || "Failed to distribute MOM.");
+        throw new Error(data.message || data.detail || `Server error ${response.status}: Failed to distribute MOM.`);
       }
       setNotificationMessage(data.message || "MOM distributed successfully!");
     } catch (err: any) {
-      console.error(err);
+      console.error("[MOM Distribution] Error caught in UI handler:", err);
       setNotificationMessage(err.message || "Failed to distribute MOM.");
     }
 

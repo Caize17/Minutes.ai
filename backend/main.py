@@ -412,9 +412,14 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
                 method="POST"
             )
             
-            with urllib.request.urlopen(req_obj, timeout=15) as response:
-                res_body = response.read().decode("utf-8")
-                print("✅ Success! Emails sent via Resend API.")
+            try:
+                with urllib.request.urlopen(req_obj, timeout=15) as response:
+                    res_body = response.read().decode("utf-8")
+                    print(f"✅ Success! Emails sent via Resend API. Response: {res_body}")
+            except urllib.error.HTTPError as he:
+                err_body = he.read().decode("utf-8")
+                print(f"❌ Resend API HTTP Error {he.code}: {err_body}")
+                raise Exception(f"Resend API Response Error {he.code}: {err_body}")
         else:
             # Fallback to standard SMTP
             msg = EmailMessage()
