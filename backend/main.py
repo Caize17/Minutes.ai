@@ -390,12 +390,12 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
         if smtp_port == 465:
             with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as smtp:
                 smtp.login(smtp_username, smtp_password)
-                smtp.send_message(msg)
+                smtp.send_message(msg, to_addrs=req.emails)
         else:
             with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
                 smtp.starttls()
                 smtp.login(smtp_username, smtp_password)
-                smtp.send_message(msg)
+                smtp.send_message(msg, to_addrs=req.emails)
         
         print("✅ Success! Dynamic SMTP emails sent to recipients.")
         
