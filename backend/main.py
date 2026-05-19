@@ -355,7 +355,7 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
         
     # If not configured in user_metadata, check if we have a central Resend API Key fallback
     if smtp_host == "resend" and (not smtp_username or not smtp_password):
-        central_resend_key = os.environ.get("RESEND_API_KEY") or getattr(config, "RESEND_API_KEY", "")
+        central_resend_key = os.environ.get("RESEND_API_KEY") or os.environ.get("resend_api_key") or getattr(config, "RESEND_API_KEY", "")
         central_sender = os.environ.get("SENDER_EMAIL") or getattr(config, "SENDER_EMAIL", "")
         if central_resend_key:
             smtp_username = central_sender or "onboarding@resend.dev"
