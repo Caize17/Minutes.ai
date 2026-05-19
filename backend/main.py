@@ -307,83 +307,132 @@ def send_email_endpoint(req: SendEmailRequest, auth_data: dict = Depends(get_aut
         print(f"❌ Failed to construct PDF: {pdf_err}")
         pdf_filename = None
 
-    # 2. Setup SMTP distribution credentials (checking user_metadata first)
-    smtp_host = "smtp.gmail.com"
-    smtp_port = 465
+    # 2. Setup SMTP/Resend distribution credentials (checking user_metadata first)
+    smtp_host = "resend"
+    smtp_port = 443
     smtp_username = ""
     smtp_password = ""
     
     if auth_data and "user" in auth_data:
         user = auth_data["user"]
         meta = getattr(user, "user_metadata", {}) or {}
-        smtp_host = meta.get("smtp_host") or ""
+        smtp_host = meta.get("smtp_host") or "resend"
         smtp_port_val = meta.get("smtp_port")
         if smtp_port_val:
             try:
                 smtp_port = int(smtp_port_val)
             except ValueError:
-                smtp_port = 465
+                smtp_port = 443 if smtp_host == "resend" else 465
         smtp_username = meta.get("smtp_username") or ""
         smtp_password = meta.get("smtp_password") or ""
         
-    # If not configured in user_metadata, fallback to central smtp credentials
-    if not smtp_username or not smtp_password:
-        smtp_username = getattr(config, "SENDER_EMAIL", "")
-        smtp_password = getattr(config, "APP_PASSWORD", "")
-        smtp_host = "smtp.gmail.com"
-        smtp_port = 465
+    # If not configured in user_metadata, check if we have a central Resend API Key fallback
+    if smtp_host == "resend" and (not smtp_username or not smtp_password):
+        central_resend_key = os.environ.get("RESEND_API_KEY") or getattr(config, "RESEND_API_KEY", "")
+        central_sender = os.environ.get("SENDER_EMAIL") or getattr(config, "SENDER_EMAIL", "")
+        if central_resend_key:
+            smtp_username = central_sender or "onboarding@resend.dev"
+            smtp_password = central_resend_key
+        else:
+            # Fallback to central Gmail SMTP credentials
+            smtp_host = "smtp.gmail.com"
+            smtp_port = 465
+            smtp_username = getattr(config, "SENDER_EMAIL", "")
+            smtp_password = getattr(config, "APP_PASSWORD", "")
     
     # Represent the active logged-in user dynamically in headers
     logged_in_email = auth_data["user"].email if (auth_data and "user" in auth_data) else smtp_username
     
     if not smtp_username or "YOUR_" in smtp_username or not smtp_password or "YOUR_" in smtp_password:
-        print("⚠️ SMTP SENDER_EMAIL or APP_PASSWORD not configured. Saved PDF locally instead!")
+        print("⚠️ SMTP/Resend SENDER_EMAIL or API key not configured. Saved PDF locally instead!")
         return {
             "success": True,
-            "message": "Saved PDF document locally in workspace directory! (Email was not sent because SMTP credentials are not configured yet.)",
+            "message": "Saved PDF document locally in workspace directory! (Email was not sent because credentials are not configured yet.)",
             "pdf_path": pdf_filename
         }
 
     try:
-        msg = EmailMessage()
-        msg['Subject'] = f"📝 Meeting Summary & Action Items: {req.file_name}"
-        msg['From'] = f"{logged_in_email} <{smtp_username}>"
-        msg['Reply-To'] = logged_in_email
-        msg['To'] = ", ".join(req.emails)
-        msg.set_content(f"Hello Team,\n\nPlease find the automated summary and action items of our meeting below. The official PDF document is also attached for your records.\n\n---\n\n{req.summary_text}")
-
-        # Attach the generated PDF
-        if pdf_filename and os.path.exists(pdf_filename):
-            with open(pdf_filename, 'rb') as f:
-                pdf_data = f.read()
-            msg.add_attachment(
-                pdf_data, 
-                maintype='application', 
-                subtype='pdf', 
-                filename=os.path.basename(pdf_filename)
+        if smtp_host == "resend":
+            # Send using Resend's HTTPS web API (firewall & port block proof)
+            import urllib.request
+            import urllib.error
+            import base64
+            
+            attachments = []
+            if pdf_filename and os.path.exists(pdf_filename):
+                with open(pdf_filename, "rb") as f:
+                    pdf_bytes = f.read()
+                pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+                attachments.append({
+                    "filename": os.path.basename(pdf_filename),
+                    "content": pdf_b64
+                })
+                
+            payload = {
+                "from": f"{logged_in_email.split('@')[0]} <{smtp_username}>",
+                "to": req.emails,
+                "reply_to": logged_in_email,
+                "subject": f"📝 Meeting Summary & Action Items: {req.file_name}",
+                "text": f"Hello Team,\n\nPlease find the automated summary and action items of our meeting below. The official PDF document is also attached for your records.\n\n---\n\n{req.summary_text}"
+            }
+            if attachments:
+                payload["attachments"] = attachments
+                
+            api_url = "https://api.resend.com/emails"
+            req_obj = urllib.request.Request(
+                api_url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {smtp_password}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
             )
-
-        # Connect to dynamic SMTP server with SSL or STARTTLS support (timeout to prevent hanging)
-        if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as smtp:
-                smtp.login(smtp_username, smtp_password)
-                smtp.send_message(msg)
+            
+            with urllib.request.urlopen(req_obj, timeout=15) as response:
+                res_body = response.read().decode("utf-8")
+                print("✅ Success! Emails sent via Resend API.")
         else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-                smtp.starttls()
-                smtp.login(smtp_username, smtp_password)
-                smtp.send_message(msg)
-        
-        print("✅ Success! Dynamic emails sent to recipients.")
+            # Fallback to standard SMTP
+            msg = EmailMessage()
+            msg['Subject'] = f"📝 Meeting Summary & Action Items: {req.file_name}"
+            msg['From'] = f"{logged_in_email} <{smtp_username}>"
+            msg['Reply-To'] = logged_in_email
+            msg['To'] = ", ".join(req.emails)
+            msg.set_content(f"Hello Team,\n\nPlease find the automated summary and action items of our meeting below. The official PDF document is also attached for your records.\n\n---\n\n{req.summary_text}")
+
+            # Attach the generated PDF
+            if pdf_filename and os.path.exists(pdf_filename):
+                with open(pdf_filename, 'rb') as f:
+                    pdf_data = f.read()
+                msg.add_attachment(
+                    pdf_data, 
+                    maintype='application', 
+                    subtype='pdf', 
+                    filename=os.path.basename(pdf_filename)
+                )
+
+            # Connect to dynamic SMTP server with SSL or STARTTLS support (timeout to prevent hanging)
+            if smtp_port == 465:
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as smtp:
+                    smtp.login(smtp_username, smtp_password)
+                    smtp.send_message(msg)
+            else:
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+                    smtp.starttls()
+                    smtp.login(smtp_username, smtp_password)
+                    smtp.send_message(msg)
+            
+            print("✅ Success! Dynamic SMTP emails sent to recipients.")
+            
         return {
             "success": True,
             "message": f"Successfully distributed Meeting Minutes to {len(req.emails)} recipients!",
             "pdf_path": pdf_filename
         }
-    except Exception as smtp_err:
-        print(f"❌ Failed to send email via SMTP: {smtp_err}")
-        return {
-            "success": False,
-            "message": f"SMTP Error: {str(smtp_err)}. PDF document has been successfully saved locally.",
-            "pdf_path": pdf_filename
-        }
+    except Exception as err:
+        print(f"❌ Failed to send email: {err}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send email: {str(err)}. PDF document has been successfully saved locally."
+        )

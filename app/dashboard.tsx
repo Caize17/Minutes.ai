@@ -63,8 +63,9 @@ export default function Dashboard({
   const [teamNameInput, setTeamNameInput] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  // SMTP Settings States
+  // SMTP/Resend Settings States
   const [isSmtpModalOpen, setIsSmtpModalOpen] = useState(false);
+  const [emailServiceMode, setEmailServiceMode] = useState<'resend' | 'smtp'>('resend');
   const [smtpHost, setSmtpHost] = useState("");
   const [smtpPort, setSmtpPort] = useState("465");
   const [smtpUsername, setSmtpUsername] = useState("");
@@ -77,10 +78,16 @@ export default function Dashboard({
       if (user) {
         setUserEmail(user.email || "Active User");
         const meta = user.user_metadata || {};
-        setSmtpHost(meta.smtp_host || "");
+        const host = meta.smtp_host || "";
+        setSmtpHost(host);
         setSmtpPort(meta.smtp_port || "465");
         setSmtpUsername(meta.smtp_username || "");
         setSmtpPassword(meta.smtp_password || "");
+        if (host === "resend" || !host) {
+          setEmailServiceMode("resend");
+        } else {
+          setEmailServiceMode("smtp");
+        }
       }
     }).catch(() => {});
   }, []);
@@ -91,10 +98,13 @@ export default function Dashboard({
     setSmtpSuccess(false);
 
     try {
+      const finalHost = emailServiceMode === 'resend' ? 'resend' : smtpHost.trim();
+      const finalPort = emailServiceMode === 'resend' ? '443' : smtpPort.trim();
+
       const { error } = await supabase.auth.updateUser({
         data: {
-          smtp_host: smtpHost.trim(),
-          smtp_port: smtpPort.trim(),
+          smtp_host: finalHost,
+          smtp_port: finalPort,
           smtp_username: smtpUsername.trim(),
           smtp_password: smtpPassword.trim()
         }
@@ -757,86 +767,171 @@ export default function Dashboard({
               </button>
             </div>
 
+            {/* Service Toggle */}
+            <div className="flex bg-[#502D55]/5 p-1 rounded-2xl mb-6">
+              <button
+                type="button"
+                onClick={() => setEmailServiceMode('resend')}
+                className={`flex-1 py-2 rounded-xl font-plus-jakarta font-bold text-xs transition-all cursor-pointer ${
+                  emailServiceMode === 'resend'
+                    ? 'bg-[#502D55] text-white shadow-sm'
+                    : 'text-[#502D55]/60 hover:text-[#502D55]'
+                }`}
+              >
+                Resend API (Recommended)
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmailServiceMode('smtp')}
+                className={`flex-1 py-2 rounded-xl font-plus-jakarta font-bold text-xs transition-all cursor-pointer ${
+                  emailServiceMode === 'smtp'
+                    ? 'bg-[#502D55] text-white shadow-sm'
+                    : 'text-[#502D55]/60 hover:text-[#502D55]'
+                }`}
+              >
+                SMTP Mail Server
+              </button>
+            </div>
+
             <form onSubmit={handleSaveSmtp} className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
-                    SMTP Host / Server
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    placeholder="Auto-detected from email..."
-                    value={smtpHost}
-                    className="w-full bg-[#502D55]/5 border border-[#502D55]/10 rounded-xl px-4 py-3 text-sm text-[#502D55]/60 font-hanken font-semibold transition-all cursor-not-allowed outline-none select-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
-                    SMTP Port
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    placeholder="—"
-                    value={smtpPort}
-                    className="w-full bg-[#502D55]/5 border border-[#502D55]/10 rounded-xl px-4 py-3 text-sm text-[#502D55]/60 font-hanken font-semibold transition-all text-center cursor-not-allowed outline-none select-none"
-                  />
-                </div>
-              </div>
+              {emailServiceMode === 'resend' ? (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
+                      Resend Sender Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. hello@yourdomain.com"
+                      value={smtpUsername}
+                      onChange={(e) => setSmtpUsername(e.target.value)}
+                      className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
-                  SMTP Username / Email Address
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. your-email@gmail.com"
-                  value={smtpUsername}
-                  onChange={(e) => handleEmailChange(e.target.value)}
-                  className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
-                />
-              </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 font-plus-jakarta">
+                        Resend API Key
+                      </label>
+                      <span className="text-[10px] text-[#935073] font-bold font-hanken">
+                        Required secure Resend Key
+                      </span>
+                    </div>
+                    <input
+                      type="password"
+                      required
+                      placeholder="re_••••••••••••••••"
+                      value={smtpPassword}
+                      onChange={(e) => setSmtpPassword(e.target.value)}
+                      className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
+                    />
+                  </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 font-plus-jakarta">
-                    SMTP Password / App Password
-                  </label>
-                  <span className="text-[10px] text-[#935073] font-bold font-hanken">
-                    Required secure 16-char App Password
-                  </span>
-                </div>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••••••••••"
-                  value={smtpPassword}
-                  onChange={(e) => setSmtpPassword(e.target.value)}
-                  className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
-                />
-              </div>
+                  <div className="bg-[#502D55]/3 rounded-2xl p-5 border border-[#502D55]/5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#935073] text-sm">🚀</span>
+                      <strong className="font-plus-jakarta text-xs text-[#502D55] font-extrabold uppercase tracking-wider">How to get a Resend API Key:</strong>
+                    </div>
+                    <ol className="font-hanken text-[11px] leading-relaxed text-[#502D55]/85 list-decimal pl-4 space-y-1">
+                      <li>
+                        Go to the <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="text-[#935073] hover:text-[#502D55] font-extrabold underline cursor-pointer">Resend website</a> and sign up for a free account.
+                      </li>
+                      <li>Verify your custom domain in the **Domains** tab to send from your own address!</li>
+                      <li>Go to the **API Keys** tab and generate a new key.</li>
+                      <li>Copy the key (starts with <code>re_</code>) and paste it into the field above!</li>
+                    </ol>
+                    <div className="border-t border-[#502D55]/5 pt-2.5">
+                      <p className="font-hanken text-[10px] leading-relaxed text-[#502D55]/60 italic">
+                        Note: Bypasses server port blocks 100% of the time, keeping your service fast, reliable, and completely secure.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
+                        SMTP Host / Server
+                      </label>
+                      <input
+                        type="text"
+                        readOnly
+                        placeholder="Auto-detected from email..."
+                        value={smtpHost === "resend" ? "" : smtpHost}
+                        className="w-full bg-[#502D55]/5 border border-[#502D55]/10 rounded-xl px-4 py-3 text-sm text-[#502D55]/60 font-hanken font-semibold transition-all cursor-not-allowed outline-none select-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
+                        SMTP Port
+                      </label>
+                      <input
+                        type="text"
+                        readOnly
+                        placeholder="—"
+                        value={smtpHost === "resend" ? "" : smtpPort}
+                        className="w-full bg-[#502D55]/5 border border-[#502D55]/10 rounded-xl px-4 py-3 text-sm text-[#502D55]/60 font-hanken font-semibold transition-all text-center cursor-not-allowed outline-none select-none"
+                      />
+                    </div>
+                  </div>
 
-              <div className="bg-[#502D55]/3 rounded-2xl p-5 border border-[#502D55]/5 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-[#935073] text-sm">🔑</span>
-                  <strong className="font-plus-jakarta text-xs text-[#502D55] font-extrabold uppercase tracking-wider">How to get a Gmail App Password:</strong>
-                </div>
-                <ol className="font-hanken text-[11px] leading-relaxed text-[#502D55]/85 list-decimal pl-4 space-y-1">
-                  <li>
-                    Go to your <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-[#935073] hover:text-[#502D55] font-extrabold underline cursor-pointer">Google App Passwords settings</a>.
-                  </li>
-                  <li>Ensure <strong>2-Step Verification</strong> is enabled on your Google account.</li>
-                  <li>Select/create an app name (e.g. <code>Minutes.ai</code>) and click <strong>Create</strong>.</li>
-                  <li>Copy the <strong>16-character code</strong> and paste it into the field above!</li>
-                </ol>
-                <div className="border-t border-[#502D55]/5 pt-2.5">
-                  <p className="font-hanken text-[10px] leading-relaxed text-[#502D55]/60 italic">
-                    Note: Your credentials are saved securely in your private, encrypted Supabase metadata and are never shared publicly.
-                  </p>
-                </div>
-              </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 mb-2 font-plus-jakarta">
+                      SMTP Username / Email Address
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. your-email@gmail.com"
+                      value={smtpUsername}
+                      onChange={(e) => handleEmailChange(e.target.value)}
+                      className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#502D55]/60 font-plus-jakarta">
+                        SMTP Password / App Password
+                      </label>
+                      <span className="text-[10px] text-[#935073] font-bold font-hanken">
+                        Required secure 16-char App Password
+                      </span>
+                    </div>
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••••••••••"
+                      value={smtpPassword}
+                      onChange={(e) => setSmtpPassword(e.target.value)}
+                      className="w-full bg-[#F3DDC8]/35 border border-[#502D55]/15 rounded-xl px-4 py-3 text-sm text-[#502D55] focus:outline-none focus:border-[#502D55]/40 font-hanken font-semibold transition-all"
+                    />
+                  </div>
+
+                  <div className="bg-[#502D55]/3 rounded-2xl p-5 border border-[#502D55]/5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#935073] text-sm">🔑</span>
+                      <strong className="font-plus-jakarta text-xs text-[#502D55] font-extrabold uppercase tracking-wider">How to get a Gmail App Password:</strong>
+                    </div>
+                    <ol className="font-hanken text-[11px] leading-relaxed text-[#502D55]/85 list-decimal pl-4 space-y-1">
+                      <li>
+                        Go to your <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-[#935073] hover:text-[#502D55] font-extrabold underline cursor-pointer">Google App Passwords settings</a>.
+                      </li>
+                      <li>Ensure <strong>2-Step Verification</strong> is enabled on your Google account.</li>
+                      <li>Select/create an app name (e.g. <code>Minutes.ai</code>) and click <strong>Create</strong>.</li>
+                      <li>Copy the <strong>16-character code</strong> and paste it into the field above!</li>
+                    </ol>
+                    <div className="border-t border-[#502D55]/5 pt-2.5">
+                      <p className="font-hanken text-[10px] leading-relaxed text-[#502D55]/60 italic">
+                        Note: Outgoing SMTP connections may require a paid cloud server plan. Use Resend API above for a 100% free solution.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-4 pt-4">
